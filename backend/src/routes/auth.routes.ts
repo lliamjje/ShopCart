@@ -1,0 +1,11 @@
+import { Router } from 'express';
+import { issueCsrf } from '../middleware/csrf.js';
+import { authenticate,optionalAuthentication } from '../middleware/authenticate.js';
+import { authRateLimit } from '../middleware/rateLimit.js';
+import * as auth from '../controllers/auth.controller.js';
+export const authRoutes=Router();
+authRoutes.get('/csrf',issueCsrf);
+authRoutes.post('/register',authRateLimit,auth.register);
+authRoutes.post('/login',authRateLimit,auth.login);
+authRoutes.post('/refresh',authRateLimit,auth.refresh);
+authRoutes.post('/logout',optionalAuthentication,authenticate,auth.logout);

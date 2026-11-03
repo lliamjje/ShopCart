@@ -1,0 +1,1934 @@
+{
+  "basePath": "/api/v1",
+  "endpointCount": 64,
+  "authentication": "Authorization: Bearer <accessToken>. El servidor revalida perfil y sesión SQL; nunca aceptar IdActor/IdSesion desde JSON.",
+  "csrf": "Obtener GET /auth/csrf con credentials=include; enviar X-CSRF-Token y cookies en POST/PATCH/DELETE y GET /carts/current.",
+  "guest": "Secreto generado en GET /carts/current; cookie HttpOnly, no accesible en JSON. Se conserva tras fusión para mantener acceso a pedidos invitados.",
+  "numericPolicy": "IDs bigint y todos los importes son strings. Entrada monetaria hasta 4 decimales, máximo 1000000000 GTQ. Salida verifica rango preciso según escala. SQL decide totales.",
+  "checkout": "Enviar cartRevision exactamente como el texto de SQL, sin convertirlo a Date. La cotización incluye dirección, método y cupón. Para cambiarla: cancelar e iniciar con otra clave.",
+  "payments": "El frontend envía orderId/action e Idempotency-Key; el backend obtiene Monto desde el pedido SQL. No se aceptan tarjetas ni importes del navegador.",
+  "returns": "Solicitud items=[{orderItemId,quantity}]; Idempotency-Key UUID. Completar fija reembolso PENDIENTE. Resolver /returns/:id/refunds reutilizando la misma clave del completado o una nueva tras rechazo.",
+  "deploymentRequirements": [
+    "Instalar y probar manualmente 012-020 en orden. No se ejecutan al arrancar.",
+    "Configurar cuenta SQL de servicio de privilegios mínimos con EXECUTE específico. Sin SELECT/INSERT/UPDATE/DELETE directos, sin permisos de esquema ni EXECUTE sobre helpers.",
+    "Autenticación/verificación Argon2id en backend; SP_Seguridad_ObtenerAutenticacion solo servicio autorizado.",
+    "Las migraciones no verificadas pueden devolver errores SQL controlados; no hay pruebas de integración reales.",
+    "La expiración es efectiva por hora SQL; limpieza persistida mediante POST /checkouts/expire por operador autorizado. No hay cuenta de limpieza programada configurada."
+  ],
+  "endpoints": [
+    {
+      "method": "GET",
+      "path": "/api/v1/catalog/categories",
+      "access": "public",
+      "procedure": "SP_Catalogo_ListarCategorias",
+      "fields": [],
+      "resultSets": [
+        "categories"
+      ],
+      "singleRecordSets": [],
+      "idempotencyHeader": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/catalog/products",
+      "access": "public",
+      "procedure": "SP_Catalogo_ListarProductos",
+      "fields": [
+        {
+          "field": "search",
+          "sqlParameter": "Texto",
+          "validation": "s.text(200).optional()"
+        },
+        {
+          "field": "categoryId",
+          "sqlParameter": "IdCategoria",
+          "validation": "s.intId.optional()"
+        },
+        {
+          "field": "minPrice",
+          "sqlParameter": "PrecioMin",
+          "validation": "s.money.optional()"
+        },
+        {
+          "field": "maxPrice",
+          "sqlParameter": "PrecioMax",
+          "validation": "s.money.optional()"
+        },
+        {
+          "field": "available",
+          "sqlParameter": "SoloDisponibles",
+          "validation": "s.bool.default(false)"
+        },
+        {
+          "field": "sort",
+          "sqlParameter": "Orden",
+          "validation": "z.enum(['NOMBRE','PRECIO_ASC','PRECIO_DESC']).default('NOMBRE')"
+        },
+        {
+          "field": "page",
+          "sqlParameter": "Pagina",
+          "validation": "s.page"
+        },
+        {
+          "field": "pageSize",
+          "sqlParameter": "TamanoPagina",
+          "validation": "s.pageSize"
+        }
+      ],
+      "resultSets": [
+        "products"
+      ],
+      "singleRecordSets": [],
+      "idempotencyHeader": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/catalog/products/:id",
+      "access": "public",
+      "procedure": "SP_Catalogo_ObtenerProducto",
+      "fields": [
+        {
+          "field": "id",
+          "sqlParameter": "IdProducto",
+          "validation": "s.id"
+        }
+      ],
+      "resultSets": [
+        "product",
+        "variants",
+        "images"
+      ],
+      "singleRecordSets": [
+        "product"
+      ],
+      "idempotencyHeader": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/catalog/categories",
+      "access": "admin",
+      "procedure": "SP_Catalogo_GuardarCategoria",
+      "fields": [
+        {
+          "field": "name",
+          "sqlParameter": "Nombre",
+          "validation": "s.text(100)"
+        },
+        {
+          "field": "description",
+          "sqlParameter": "Descripcion",
+          "validation": "s.optionalText(500)"
+        },
+        {
+          "field": "active",
+          "sqlParameter": "EstaActiva",
+          "validation": "s.bool.default(true)"
+        }
+      ],
+      "resultSets": [
+        "category"
+      ],
+      "singleRecordSets": [
+        "category"
+      ],
+      "idempotencyHeader": null
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/catalog/categories/:id",
+      "access": "admin",
+      "procedure": "SP_Catalogo_GuardarCategoria",
+      "fields": [
+        {
+          "field": "name",
+          "sqlParameter": "Nombre",
+          "validation": "s.text(100)"
+        },
+        {
+          "field": "description",
+          "sqlParameter": "Descripcion",
+          "validation": "s.optionalText(500)"
+        },
+        {
+          "field": "active",
+          "sqlParameter": "EstaActiva",
+          "validation": "s.bool.default(true)"
+        },
+        {
+          "field": "id",
+          "sqlParameter": "IdCategoria",
+          "validation": "s.intId"
+        }
+      ],
+      "resultSets": [
+        "category"
+      ],
+      "singleRecordSets": [
+        "category"
+      ],
+      "idempotencyHeader": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/catalog/products",
+      "access": "admin",
+      "procedure": "SP_Catalogo_GuardarProducto",
+      "fields": [
+        {
+          "field": "categoryId",
+          "sqlParameter": "IdCategoria",
+          "validation": "s.intId"
+        },
+        {
+          "field": "name",
+          "sqlParameter": "Nombre",
+          "validation": "s.text(200)"
+        },
+        {
+          "field": "description",
+          "sqlParameter": "Descripcion",
+          "validation": "s.optionalText(20000)"
+        },
+        {
+          "field": "active",
+          "sqlParameter": "EstaActivo",
+          "validation": "s.bool.default(false)"
+        }
+      ],
+      "resultSets": [
+        "product"
+      ],
+      "singleRecordSets": [
+        "product"
+      ],
+      "idempotencyHeader": null
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/catalog/products/:id",
+      "access": "admin",
+      "procedure": "SP_Catalogo_GuardarProducto",
+      "fields": [
+        {
+          "field": "id",
+          "sqlParameter": "IdProducto",
+          "validation": "s.id"
+        },
+        {
+          "field": "categoryId",
+          "sqlParameter": "IdCategoria",
+          "validation": "s.intId"
+        },
+        {
+          "field": "name",
+          "sqlParameter": "Nombre",
+          "validation": "s.text(200)"
+        },
+        {
+          "field": "description",
+          "sqlParameter": "Descripcion",
+          "validation": "s.optionalText(20000)"
+        },
+        {
+          "field": "active",
+          "sqlParameter": "EstaActivo",
+          "validation": "s.bool.default(false)"
+        }
+      ],
+      "resultSets": [
+        "product"
+      ],
+      "singleRecordSets": [
+        "product"
+      ],
+      "idempotencyHeader": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/catalog/variants",
+      "access": "admin",
+      "procedure": "SP_Catalogo_GuardarVariante",
+      "fields": [
+        {
+          "field": "productId",
+          "sqlParameter": "IdProducto",
+          "validation": "s.id"
+        },
+        {
+          "field": "sku",
+          "sqlParameter": "SKU",
+          "validation": "s.text(64)"
+        },
+        {
+          "field": "price",
+          "sqlParameter": "Precio",
+          "validation": "s.money.refine(v=>Number(v)>0)"
+        },
+        {
+          "field": "size",
+          "sqlParameter": "Talla",
+          "validation": "s.optionalText(50)"
+        },
+        {
+          "field": "color",
+          "sqlParameter": "Color",
+          "validation": "s.optionalText(50)"
+        },
+        {
+          "field": "active",
+          "sqlParameter": "EstaActiva",
+          "validation": "s.bool.default(true)"
+        }
+      ],
+      "resultSets": [
+        "variant"
+      ],
+      "singleRecordSets": [
+        "variant"
+      ],
+      "idempotencyHeader": null
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/catalog/variants/:id",
+      "access": "admin",
+      "procedure": "SP_Catalogo_GuardarVariante",
+      "fields": [
+        {
+          "field": "id",
+          "sqlParameter": "IdVariante",
+          "validation": "s.id"
+        },
+        {
+          "field": "productId",
+          "sqlParameter": "IdProducto",
+          "validation": "s.id"
+        },
+        {
+          "field": "sku",
+          "sqlParameter": "SKU",
+          "validation": "s.text(64)"
+        },
+        {
+          "field": "price",
+          "sqlParameter": "Precio",
+          "validation": "s.money.refine(v=>Number(v)>0)"
+        },
+        {
+          "field": "size",
+          "sqlParameter": "Talla",
+          "validation": "s.optionalText(50)"
+        },
+        {
+          "field": "color",
+          "sqlParameter": "Color",
+          "validation": "s.optionalText(50)"
+        },
+        {
+          "field": "active",
+          "sqlParameter": "EstaActiva",
+          "validation": "s.bool.default(true)"
+        }
+      ],
+      "resultSets": [
+        "variant"
+      ],
+      "singleRecordSets": [
+        "variant"
+      ],
+      "idempotencyHeader": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/catalog/images",
+      "access": "admin",
+      "procedure": "SP_Catalogo_GuardarImagen",
+      "fields": [
+        {
+          "field": "productId",
+          "sqlParameter": "IdProducto",
+          "validation": "s.id"
+        },
+        {
+          "field": "path",
+          "sqlParameter": "Ruta",
+          "validation": "s.text(500)"
+        },
+        {
+          "field": "alt",
+          "sqlParameter": "TextoAlternativo",
+          "validation": "s.optionalText(250)"
+        },
+        {
+          "field": "displayOrder",
+          "sqlParameter": "Orden",
+          "validation": "z.number().int().min(0).max(2147483647).default(0)"
+        },
+        {
+          "field": "primary",
+          "sqlParameter": "EsPrincipal",
+          "validation": "s.bool.default(false)"
+        },
+        {
+          "field": "active",
+          "sqlParameter": "EstaActiva",
+          "validation": "s.bool.default(true)"
+        }
+      ],
+      "resultSets": [
+        "image"
+      ],
+      "singleRecordSets": [
+        "image"
+      ],
+      "idempotencyHeader": null
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/catalog/images/:id",
+      "access": "admin",
+      "procedure": "SP_Catalogo_GuardarImagen",
+      "fields": [
+        {
+          "field": "id",
+          "sqlParameter": "IdImagen",
+          "validation": "s.id"
+        },
+        {
+          "field": "productId",
+          "sqlParameter": "IdProducto",
+          "validation": "s.id"
+        },
+        {
+          "field": "path",
+          "sqlParameter": "Ruta",
+          "validation": "s.text(500)"
+        },
+        {
+          "field": "alt",
+          "sqlParameter": "TextoAlternativo",
+          "validation": "s.optionalText(250)"
+        },
+        {
+          "field": "displayOrder",
+          "sqlParameter": "Orden",
+          "validation": "z.number().int().min(0).max(2147483647).default(0)"
+        },
+        {
+          "field": "primary",
+          "sqlParameter": "EsPrincipal",
+          "validation": "s.bool.default(false)"
+        },
+        {
+          "field": "active",
+          "sqlParameter": "EstaActiva",
+          "validation": "s.bool.default(true)"
+        }
+      ],
+      "resultSets": [
+        "image"
+      ],
+      "singleRecordSets": [
+        "image"
+      ],
+      "idempotencyHeader": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/users/me",
+      "access": "user",
+      "procedure": "SP_Seguridad_ConsultarPerfil",
+      "fields": [],
+      "resultSets": [
+        "profile",
+        "roles"
+      ],
+      "singleRecordSets": [
+        "profile"
+      ],
+      "idempotencyHeader": null
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/users/me",
+      "access": "user",
+      "procedure": "SP_Seguridad_ActualizarPerfil",
+      "fields": [
+        {
+          "field": "firstName",
+          "sqlParameter": "Nombre",
+          "validation": "s.text(100)"
+        },
+        {
+          "field": "lastName",
+          "sqlParameter": "Apellido",
+          "validation": "s.text(100)"
+        }
+      ],
+      "resultSets": [],
+      "singleRecordSets": [],
+      "idempotencyHeader": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/users/me/session",
+      "access": "user",
+      "procedure": "SP_Seguridad_ConsultarSesion",
+      "fields": [],
+      "resultSets": [
+        "session"
+      ],
+      "singleRecordSets": [
+        "session"
+      ],
+      "idempotencyHeader": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/users/me/tokens/:id/revoke",
+      "access": "user",
+      "procedure": "SP_Seguridad_RevocarToken",
+      "fields": [
+        {
+          "field": "id",
+          "sqlParameter": "IdToken",
+          "validation": "s.id"
+        }
+      ],
+      "resultSets": [],
+      "singleRecordSets": [],
+      "idempotencyHeader": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/users/me/addresses",
+      "access": "user",
+      "procedure": "SP_Seguridad_ListarDirecciones",
+      "fields": [],
+      "resultSets": [
+        "addresses"
+      ],
+      "singleRecordSets": [],
+      "idempotencyHeader": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/users/me/addresses",
+      "access": "user",
+      "procedure": "SP_Seguridad_GuardarDireccion",
+      "fields": [
+        {
+          "field": "recipientName",
+          "sqlParameter": "Nombre",
+          "validation": "s.text(150)"
+        },
+        {
+          "field": "phone",
+          "sqlParameter": "Telefono",
+          "validation": "s.text(25)"
+        },
+        {
+          "field": "department",
+          "sqlParameter": "Departamento",
+          "validation": "s.text(100)"
+        },
+        {
+          "field": "city",
+          "sqlParameter": "Municipio",
+          "validation": "s.text(100)"
+        },
+        {
+          "field": "address1",
+          "sqlParameter": "Linea1",
+          "validation": "s.text(250)"
+        },
+        {
+          "field": "address2",
+          "sqlParameter": "Linea2",
+          "validation": "s.optionalText(250)"
+        },
+        {
+          "field": "references",
+          "sqlParameter": "Referencias",
+          "validation": "s.optionalText(500)"
+        },
+        {
+          "field": "postalCode",
+          "sqlParameter": "CodigoPostal",
+          "validation": "s.optionalText(15)"
+        },
+        {
+          "field": "primary",
+          "sqlParameter": "Predeterminada",
+          "validation": "s.bool.default(false)"
+        },
+        {
+          "field": "active",
+          "sqlParameter": "Activa",
+          "validation": "s.bool.default(true)"
+        }
+      ],
+      "resultSets": [
+        "address"
+      ],
+      "singleRecordSets": [
+        "address"
+      ],
+      "idempotencyHeader": null
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/users/me/addresses/:id",
+      "access": "user",
+      "procedure": "SP_Seguridad_GuardarDireccion",
+      "fields": [
+        {
+          "field": "id",
+          "sqlParameter": "IdDireccion",
+          "validation": "s.id"
+        },
+        {
+          "field": "recipientName",
+          "sqlParameter": "Nombre",
+          "validation": "s.text(150)"
+        },
+        {
+          "field": "phone",
+          "sqlParameter": "Telefono",
+          "validation": "s.text(25)"
+        },
+        {
+          "field": "department",
+          "sqlParameter": "Departamento",
+          "validation": "s.text(100)"
+        },
+        {
+          "field": "city",
+          "sqlParameter": "Municipio",
+          "validation": "s.text(100)"
+        },
+        {
+          "field": "address1",
+          "sqlParameter": "Linea1",
+          "validation": "s.text(250)"
+        },
+        {
+          "field": "address2",
+          "sqlParameter": "Linea2",
+          "validation": "s.optionalText(250)"
+        },
+        {
+          "field": "references",
+          "sqlParameter": "Referencias",
+          "validation": "s.optionalText(500)"
+        },
+        {
+          "field": "postalCode",
+          "sqlParameter": "CodigoPostal",
+          "validation": "s.optionalText(15)"
+        },
+        {
+          "field": "primary",
+          "sqlParameter": "Predeterminada",
+          "validation": "s.bool.default(false)"
+        },
+        {
+          "field": "active",
+          "sqlParameter": "Activa",
+          "validation": "s.bool.default(true)"
+        }
+      ],
+      "resultSets": [
+        "address"
+      ],
+      "singleRecordSets": [
+        "address"
+      ],
+      "idempotencyHeader": null
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/users/:id/access",
+      "access": "admin",
+      "procedure": "SP_Seguridad_AdministrarUsuario",
+      "fields": [
+        {
+          "field": "id",
+          "sqlParameter": "IdUsuario",
+          "validation": "s.id"
+        },
+        {
+          "field": "role",
+          "sqlParameter": "Rol",
+          "validation": "z.enum(['Cliente','Operador','Administrador'])"
+        },
+        {
+          "field": "active",
+          "sqlParameter": "EstaActivo",
+          "validation": "s.bool"
+        }
+      ],
+      "resultSets": [],
+      "singleRecordSets": [],
+      "idempotencyHeader": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/inventory",
+      "access": "operator",
+      "procedure": "SP_Inventario_Consultar",
+      "fields": [
+        {
+          "field": "variantId",
+          "sqlParameter": "IdVariante",
+          "validation": "s.id.optional()"
+        },
+        {
+          "field": "threshold",
+          "sqlParameter": "Umbral",
+          "validation": "z.coerce.number().int().min(0).max(2147483647).optional()"
+        },
+        {
+          "field": "page",
+          "sqlParameter": "Pagina",
+          "validation": "s.page"
+        },
+        {
+          "field": "pageSize",
+          "sqlParameter": "TamanoPagina",
+          "validation": "s.pageSize"
+        }
+      ],
+      "resultSets": [
+        "inventory"
+      ],
+      "singleRecordSets": [],
+      "idempotencyHeader": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/inventory/movements",
+      "access": "operator",
+      "procedure": "SP_Inventario_RegistrarMovimiento",
+      "fields": [
+        {
+          "field": "variantId",
+          "sqlParameter": "IdVariante",
+          "validation": "s.id"
+        },
+        {
+          "field": "type",
+          "sqlParameter": "Tipo",
+          "validation": "z.enum(['ENTRADA','SALIDA','AJUSTE_POSITIVO','AJUSTE_NEGATIVO'])"
+        },
+        {
+          "field": "quantity",
+          "sqlParameter": "Cantidad",
+          "validation": "s.quantity"
+        },
+        {
+          "field": "reason",
+          "sqlParameter": "Motivo",
+          "validation": "s.text(500)"
+        },
+        {
+          "field": "operationId",
+          "sqlParameter": "IdOperacion",
+          "validation": "s.id"
+        }
+      ],
+      "resultSets": [
+        "movement"
+      ],
+      "singleRecordSets": [
+        "movement"
+      ],
+      "idempotencyHeader": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/inventory/movements",
+      "access": "operator",
+      "procedure": "SP_Inventario_ListarMovimientos",
+      "fields": [
+        {
+          "field": "from",
+          "sqlParameter": "Desde",
+          "validation": "s.instant"
+        },
+        {
+          "field": "to",
+          "sqlParameter": "Hasta",
+          "validation": "s.instant"
+        },
+        {
+          "field": "variantId",
+          "sqlParameter": "IdVariante",
+          "validation": "s.id.optional()"
+        },
+        {
+          "field": "page",
+          "sqlParameter": "Pagina",
+          "validation": "s.page"
+        },
+        {
+          "field": "pageSize",
+          "sqlParameter": "TamanoPagina",
+          "validation": "s.pageSize"
+        }
+      ],
+      "resultSets": [
+        "movements"
+      ],
+      "singleRecordSets": [],
+      "idempotencyHeader": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/carts/current",
+      "access": "optional",
+      "procedure": "SP_Carritos_Consultar",
+      "fields": [],
+      "resultSets": [
+        "cart",
+        "items",
+        "totals"
+      ],
+      "singleRecordSets": [
+        "cart",
+        "totals"
+      ],
+      "idempotencyHeader": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/carts/current/items",
+      "access": "optional",
+      "procedure": "SP_Carritos_Modificar",
+      "fields": [
+        {
+          "field": "variantId",
+          "sqlParameter": "IdVariante",
+          "validation": "s.id"
+        },
+        {
+          "field": "quantity",
+          "sqlParameter": "Cantidad",
+          "validation": "s.quantity"
+        }
+      ],
+      "resultSets": [],
+      "singleRecordSets": [],
+      "idempotencyHeader": null
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/carts/current/items/:id",
+      "access": "optional",
+      "procedure": "SP_Carritos_Modificar",
+      "fields": [
+        {
+          "field": "id",
+          "sqlParameter": "IdVariante",
+          "validation": "s.id"
+        },
+        {
+          "field": "quantity",
+          "sqlParameter": "Cantidad",
+          "validation": "s.quantity"
+        }
+      ],
+      "resultSets": [],
+      "singleRecordSets": [],
+      "idempotencyHeader": null
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/carts/current/items/:id",
+      "access": "optional",
+      "procedure": "SP_Carritos_Modificar",
+      "fields": [
+        {
+          "field": "id",
+          "sqlParameter": "IdVariante",
+          "validation": "s.id"
+        }
+      ],
+      "resultSets": [],
+      "singleRecordSets": [],
+      "idempotencyHeader": null
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/carts/current/items",
+      "access": "optional",
+      "procedure": "SP_Carritos_Modificar",
+      "fields": [],
+      "resultSets": [],
+      "singleRecordSets": [],
+      "idempotencyHeader": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/carts/:id",
+      "access": "optional",
+      "procedure": "SP_Carritos_Consultar",
+      "fields": [
+        {
+          "field": "id",
+          "sqlParameter": "IdCarrito",
+          "validation": "s.id"
+        }
+      ],
+      "resultSets": [
+        "cart",
+        "items",
+        "totals"
+      ],
+      "singleRecordSets": [
+        "cart",
+        "totals"
+      ],
+      "idempotencyHeader": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/coupons/validate",
+      "access": "optional",
+      "procedure": "SP_Cupones_ValidarCarrito",
+      "fields": [
+        {
+          "field": "cartId",
+          "sqlParameter": "IdCarrito",
+          "validation": "s.id"
+        },
+        {
+          "field": "code",
+          "sqlParameter": "Codigo",
+          "validation": "s.text(50)"
+        }
+      ],
+      "resultSets": [
+        "quote"
+      ],
+      "singleRecordSets": [
+        "quote"
+      ],
+      "idempotencyHeader": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/coupons",
+      "access": "admin",
+      "procedure": "SP_Cupones_Guardar",
+      "fields": [
+        {
+          "field": "code",
+          "sqlParameter": "Codigo",
+          "validation": "s.text(50)"
+        },
+        {
+          "field": "type",
+          "sqlParameter": "Tipo",
+          "validation": "z.enum(['PORCENTAJE','MONTO_FIJO'])"
+        },
+        {
+          "field": "value",
+          "sqlParameter": "Valor",
+          "validation": "s.money.refine(v=>Number(v)>0)"
+        },
+        {
+          "field": "minimum",
+          "sqlParameter": "Minimo",
+          "validation": "s.money"
+        },
+        {
+          "field": "startsAt",
+          "sqlParameter": "Inicio",
+          "validation": "s.instant"
+        },
+        {
+          "field": "endsAt",
+          "sqlParameter": "Fin",
+          "validation": "s.instant"
+        },
+        {
+          "field": "categoryId",
+          "sqlParameter": "IdCategoria",
+          "validation": "s.intId.nullish()"
+        },
+        {
+          "field": "globalLimit",
+          "sqlParameter": "LimiteTotal",
+          "validation": "s.quantity.nullish()"
+        },
+        {
+          "field": "userLimit",
+          "sqlParameter": "LimiteUsuario",
+          "validation": "s.quantity.nullish()"
+        },
+        {
+          "field": "active",
+          "sqlParameter": "Activo",
+          "validation": "s.bool.default(true)"
+        },
+        {
+          "field": "description",
+          "sqlParameter": "Descripcion",
+          "validation": "s.optionalText(250)"
+        }
+      ],
+      "resultSets": [
+        "coupon"
+      ],
+      "singleRecordSets": [
+        "coupon"
+      ],
+      "idempotencyHeader": null
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/coupons/:id",
+      "access": "admin",
+      "procedure": "SP_Cupones_Guardar",
+      "fields": [
+        {
+          "field": "id",
+          "sqlParameter": "IdCupon",
+          "validation": "s.id"
+        },
+        {
+          "field": "code",
+          "sqlParameter": "Codigo",
+          "validation": "s.text(50)"
+        },
+        {
+          "field": "type",
+          "sqlParameter": "Tipo",
+          "validation": "z.enum(['PORCENTAJE','MONTO_FIJO'])"
+        },
+        {
+          "field": "value",
+          "sqlParameter": "Valor",
+          "validation": "s.money.refine(v=>Number(v)>0)"
+        },
+        {
+          "field": "minimum",
+          "sqlParameter": "Minimo",
+          "validation": "s.money"
+        },
+        {
+          "field": "startsAt",
+          "sqlParameter": "Inicio",
+          "validation": "s.instant"
+        },
+        {
+          "field": "endsAt",
+          "sqlParameter": "Fin",
+          "validation": "s.instant"
+        },
+        {
+          "field": "categoryId",
+          "sqlParameter": "IdCategoria",
+          "validation": "s.intId.nullish()"
+        },
+        {
+          "field": "globalLimit",
+          "sqlParameter": "LimiteTotal",
+          "validation": "s.quantity.nullish()"
+        },
+        {
+          "field": "userLimit",
+          "sqlParameter": "LimiteUsuario",
+          "validation": "s.quantity.nullish()"
+        },
+        {
+          "field": "active",
+          "sqlParameter": "Activo",
+          "validation": "s.bool.default(true)"
+        },
+        {
+          "field": "description",
+          "sqlParameter": "Descripcion",
+          "validation": "s.optionalText(250)"
+        }
+      ],
+      "resultSets": [
+        "coupon"
+      ],
+      "singleRecordSets": [
+        "coupon"
+      ],
+      "idempotencyHeader": null
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/coupons/:id/state",
+      "access": "admin",
+      "procedure": "SP_Cupones_CambiarEstado",
+      "fields": [
+        {
+          "field": "id",
+          "sqlParameter": "IdCupon",
+          "validation": "s.id"
+        },
+        {
+          "field": "active",
+          "sqlParameter": "Activo",
+          "validation": "s.bool"
+        }
+      ],
+      "resultSets": [],
+      "singleRecordSets": [],
+      "idempotencyHeader": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/coupons/:id/uses",
+      "access": "admin",
+      "procedure": "SP_Cupones_ConsultarUsos",
+      "fields": [
+        {
+          "field": "id",
+          "sqlParameter": "IdCupon",
+          "validation": "s.id"
+        },
+        {
+          "field": "page",
+          "sqlParameter": "Pagina",
+          "validation": "s.page"
+        },
+        {
+          "field": "pageSize",
+          "sqlParameter": "TamanoPagina",
+          "validation": "s.pageSize"
+        }
+      ],
+      "resultSets": [
+        "uses"
+      ],
+      "singleRecordSets": [],
+      "idempotencyHeader": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/checkouts",
+      "access": "optional",
+      "procedure": "SP_Checkout_Iniciar",
+      "fields": [
+        {
+          "field": "cartId",
+          "sqlParameter": "IdCarrito",
+          "validation": "s.id"
+        },
+        {
+          "field": "cartRevision",
+          "sqlParameter": "RevisionCarrito",
+          "validation": "s.revision"
+        },
+        {
+          "field": "shippingMethodId",
+          "sqlParameter": "IdMetodoEnvio",
+          "validation": "s.intId"
+        },
+        {
+          "field": "recipientName",
+          "sqlParameter": "NombreDestinatario",
+          "validation": "s.text(150)"
+        },
+        {
+          "field": "phone",
+          "sqlParameter": "Telefono",
+          "validation": "s.text(25)"
+        },
+        {
+          "field": "department",
+          "sqlParameter": "Departamento",
+          "validation": "s.text(100)"
+        },
+        {
+          "field": "city",
+          "sqlParameter": "Ciudad",
+          "validation": "s.text(100)"
+        },
+        {
+          "field": "address1",
+          "sqlParameter": "Direccion1",
+          "validation": "s.text(250)"
+        },
+        {
+          "field": "address2",
+          "sqlParameter": "Direccion2",
+          "validation": "s.optionalText(250)"
+        },
+        {
+          "field": "postalCode",
+          "sqlParameter": "CodigoPostal",
+          "validation": "s.optionalText(15)"
+        },
+        {
+          "field": "addressId",
+          "sqlParameter": "IdDireccion",
+          "validation": "s.id.nullish()"
+        },
+        {
+          "field": "couponCode",
+          "sqlParameter": "CodigoCupon",
+          "validation": "s.optionalText(50)"
+        }
+      ],
+      "resultSets": [
+        "checkout"
+      ],
+      "singleRecordSets": [
+        "checkout"
+      ],
+      "idempotencyHeader": {
+        "required": true,
+        "format": "16-128 caracteres A-Z a-z 0-9 _ -",
+        "scope": "CHECKOUT"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/checkouts/expire",
+      "access": "operator",
+      "procedure": "SP_Checkout_Expirar",
+      "fields": [
+        {
+          "field": "limit",
+          "sqlParameter": "Limite",
+          "validation": "z.number().int().min(1).max(1000).default(100)"
+        }
+      ],
+      "resultSets": [
+        "expiration"
+      ],
+      "singleRecordSets": [
+        "expiration"
+      ],
+      "idempotencyHeader": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/checkouts/:id",
+      "access": "optional",
+      "procedure": "SP_Checkout_Consultar",
+      "fields": [
+        {
+          "field": "id",
+          "sqlParameter": "IdCheckout",
+          "validation": "s.id"
+        }
+      ],
+      "resultSets": [
+        "checkout",
+        "items",
+        "inventoryReservations",
+        "couponReservations",
+        "order"
+      ],
+      "singleRecordSets": [
+        "checkout",
+        "order"
+      ],
+      "idempotencyHeader": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/checkouts/:id/cancel",
+      "access": "optional",
+      "procedure": "SP_Checkout_Cancelar",
+      "fields": [
+        {
+          "field": "id",
+          "sqlParameter": "IdCheckout",
+          "validation": "s.id"
+        }
+      ],
+      "resultSets": [],
+      "singleRecordSets": [],
+      "idempotencyHeader": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/orders/payments",
+      "access": "optional",
+      "procedure": "SP_Pedidos_ProcesarPago",
+      "fields": [
+        {
+          "field": "orderId",
+          "sqlParameter": "IdPedido",
+          "validation": "s.id"
+        },
+        {
+          "field": "action",
+          "sqlParameter": "Accion",
+          "validation": "z.enum(['CREAR','APROBAR','RECHAZAR'])"
+        }
+      ],
+      "resultSets": [
+        "payment"
+      ],
+      "singleRecordSets": [
+        "payment"
+      ],
+      "idempotencyHeader": {
+        "required": true,
+        "format": "16-128 caracteres A-Z a-z 0-9 _ -",
+        "scope": "PAY"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/orders",
+      "access": "user",
+      "procedure": "SP_Pedidos_Listar",
+      "fields": [
+        {
+          "field": "state",
+          "sqlParameter": "Estado",
+          "validation": "s.orderState.optional()"
+        },
+        {
+          "field": "from",
+          "sqlParameter": "Desde",
+          "validation": "s.instant.optional()"
+        },
+        {
+          "field": "to",
+          "sqlParameter": "Hasta",
+          "validation": "s.instant.optional()"
+        },
+        {
+          "field": "page",
+          "sqlParameter": "Pagina",
+          "validation": "s.page"
+        },
+        {
+          "field": "pageSize",
+          "sqlParameter": "TamanoPagina",
+          "validation": "s.pageSize"
+        }
+      ],
+      "resultSets": [
+        "orders"
+      ],
+      "singleRecordSets": [],
+      "idempotencyHeader": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/orders/admin",
+      "access": "operator",
+      "procedure": "SP_Pedidos_Listar",
+      "fields": [
+        {
+          "field": "userId",
+          "sqlParameter": "IdUsuario",
+          "validation": "s.id.optional()"
+        },
+        {
+          "field": "state",
+          "sqlParameter": "Estado",
+          "validation": "s.orderState.optional()"
+        },
+        {
+          "field": "from",
+          "sqlParameter": "Desde",
+          "validation": "s.instant.optional()"
+        },
+        {
+          "field": "to",
+          "sqlParameter": "Hasta",
+          "validation": "s.instant.optional()"
+        },
+        {
+          "field": "page",
+          "sqlParameter": "Pagina",
+          "validation": "s.page"
+        },
+        {
+          "field": "pageSize",
+          "sqlParameter": "TamanoPagina",
+          "validation": "s.pageSize"
+        }
+      ],
+      "resultSets": [
+        "orders"
+      ],
+      "singleRecordSets": [],
+      "idempotencyHeader": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/orders/number/:number",
+      "access": "optional",
+      "procedure": "SP_Pedidos_Consultar",
+      "fields": [
+        {
+          "field": "number",
+          "sqlParameter": "NumeroPedido",
+          "validation": "s.text(30)"
+        }
+      ],
+      "resultSets": [
+        "order",
+        "items",
+        "payments",
+        "history"
+      ],
+      "singleRecordSets": [
+        "order"
+      ],
+      "idempotencyHeader": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/orders/:id",
+      "access": "optional",
+      "procedure": "SP_Pedidos_Consultar",
+      "fields": [
+        {
+          "field": "id",
+          "sqlParameter": "IdPedido",
+          "validation": "s.id"
+        }
+      ],
+      "resultSets": [
+        "order",
+        "items",
+        "payments",
+        "history"
+      ],
+      "singleRecordSets": [
+        "order"
+      ],
+      "idempotencyHeader": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/orders/:id/returns",
+      "access": "optional",
+      "procedure": "SP_Devoluciones_Consultar",
+      "fields": [
+        {
+          "field": "id",
+          "sqlParameter": "IdPedido",
+          "validation": "s.id"
+        }
+      ],
+      "resultSets": [
+        "returns",
+        "items",
+        "refunds",
+        "cancellationRefunds"
+      ],
+      "singleRecordSets": [],
+      "idempotencyHeader": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/orders/:id/cancel",
+      "access": "optional",
+      "procedure": "SP_Pedidos_Cancelar",
+      "fields": [
+        {
+          "field": "id",
+          "sqlParameter": "IdPedido",
+          "validation": "s.id"
+        }
+      ],
+      "resultSets": [
+        "order",
+        "refunds"
+      ],
+      "singleRecordSets": [
+        "order"
+      ],
+      "idempotencyHeader": {
+        "required": true,
+        "format": "16-128 caracteres A-Z a-z 0-9 _ -",
+        "scope": "CANCEL"
+      }
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/orders/:id/state",
+      "access": "operator",
+      "procedure": "SP_Pedidos_CambiarEstado",
+      "fields": [
+        {
+          "field": "id",
+          "sqlParameter": "IdPedido",
+          "validation": "s.id"
+        },
+        {
+          "field": "state",
+          "sqlParameter": "EstadoNuevo",
+          "validation": "z.enum(['EN_PREPARACION','ENVIADO','ENTREGADO'])"
+        },
+        {
+          "field": "note",
+          "sqlParameter": "Observacion",
+          "validation": "s.optionalText(500)"
+        }
+      ],
+      "resultSets": [],
+      "singleRecordSets": [],
+      "idempotencyHeader": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/returns",
+      "access": "optional",
+      "procedure": "SP_Devoluciones_Solicitar",
+      "fields": [
+        {
+          "field": "orderId",
+          "sqlParameter": "IdPedido",
+          "validation": "s.id"
+        },
+        {
+          "field": "items",
+          "sqlParameter": "Lineas",
+          "validation": "s.returnLines"
+        },
+        {
+          "field": "reason",
+          "sqlParameter": "Motivo",
+          "validation": "s.text(500)"
+        }
+      ],
+      "resultSets": [
+        "return"
+      ],
+      "singleRecordSets": [
+        "return"
+      ],
+      "idempotencyHeader": {
+        "required": true,
+        "format": "UUID",
+        "scope": "RETURN"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/returns/:id/items",
+      "access": "optional",
+      "procedure": "SP_Devoluciones_Solicitar",
+      "fields": [
+        {
+          "field": "id",
+          "sqlParameter": "IdDevolucion",
+          "validation": "s.id"
+        },
+        {
+          "field": "orderId",
+          "sqlParameter": "IdPedido",
+          "validation": "s.id"
+        },
+        {
+          "field": "items",
+          "sqlParameter": "Lineas",
+          "validation": "s.returnLines"
+        },
+        {
+          "field": "reason",
+          "sqlParameter": "Motivo",
+          "validation": "s.text(500)"
+        }
+      ],
+      "resultSets": [
+        "return"
+      ],
+      "singleRecordSets": [
+        "return"
+      ],
+      "idempotencyHeader": {
+        "required": true,
+        "format": "UUID",
+        "scope": "RETURN"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/returns",
+      "access": "operator",
+      "procedure": "SP_Devoluciones_Listar",
+      "fields": [
+        {
+          "field": "state",
+          "sqlParameter": "Estado",
+          "validation": "s.returnState.optional()"
+        },
+        {
+          "field": "page",
+          "sqlParameter": "Pagina",
+          "validation": "s.page"
+        },
+        {
+          "field": "pageSize",
+          "sqlParameter": "TamanoPagina",
+          "validation": "s.pageSize"
+        }
+      ],
+      "resultSets": [
+        "returns"
+      ],
+      "singleRecordSets": [],
+      "idempotencyHeader": null
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/returns/:id/state",
+      "access": "operator",
+      "procedure": "SP_Devoluciones_CambiarEstado",
+      "fields": [
+        {
+          "field": "id",
+          "sqlParameter": "IdDevolucion",
+          "validation": "s.id"
+        },
+        {
+          "field": "state",
+          "sqlParameter": "EstadoNuevo",
+          "validation": "z.enum(['APROBADA','RECHAZADA','RECIBIDA'])"
+        },
+        {
+          "field": "note",
+          "sqlParameter": "Observacion",
+          "validation": "s.optionalText(1000)"
+        }
+      ],
+      "resultSets": [],
+      "singleRecordSets": [],
+      "idempotencyHeader": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/returns/:id/cancel",
+      "access": "optional",
+      "procedure": "SP_Devoluciones_CambiarEstado",
+      "fields": [
+        {
+          "field": "id",
+          "sqlParameter": "IdDevolucion",
+          "validation": "s.id"
+        },
+        {
+          "field": "note",
+          "sqlParameter": "Observacion",
+          "validation": "s.optionalText(1000)"
+        }
+      ],
+      "resultSets": [],
+      "singleRecordSets": [],
+      "idempotencyHeader": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/returns/:id/complete",
+      "access": "operator",
+      "procedure": "SP_Devoluciones_Completar",
+      "fields": [
+        {
+          "field": "id",
+          "sqlParameter": "IdDevolucion",
+          "validation": "s.id"
+        }
+      ],
+      "resultSets": [
+        "return",
+        "refunds"
+      ],
+      "singleRecordSets": [
+        "return"
+      ],
+      "idempotencyHeader": {
+        "required": true,
+        "format": "16-128 caracteres A-Z a-z 0-9 _ -",
+        "scope": "REFUND"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/returns/:id/refunds",
+      "access": "operator",
+      "procedure": "SP_Devoluciones_ProcesarReembolso",
+      "fields": [
+        {
+          "field": "id",
+          "sqlParameter": "IdDevolucion",
+          "validation": "s.id"
+        },
+        {
+          "field": "action",
+          "sqlParameter": "Accion",
+          "validation": "z.enum(['CREAR','APROBAR','RECHAZAR'])"
+        }
+      ],
+      "resultSets": [
+        "refund"
+      ],
+      "singleRecordSets": [
+        "refund"
+      ],
+      "idempotencyHeader": {
+        "required": true,
+        "format": "16-128 caracteres A-Z a-z 0-9 _ -",
+        "scope": "REFUND"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/reports/sales",
+      "access": "admin",
+      "procedure": "SP_Reportes_Ventas",
+      "fields": [
+        {
+          "field": "from",
+          "sqlParameter": "Desde",
+          "validation": "s.instant"
+        },
+        {
+          "field": "to",
+          "sqlParameter": "Hasta",
+          "validation": "s.instant"
+        },
+        {
+          "field": "dimension",
+          "sqlParameter": "Dimension",
+          "validation": "z.enum(['DIA','SEMANA','MES','PRODUCTO','CATEGORIA','TOP']).default('DIA')"
+        },
+        {
+          "field": "page",
+          "sqlParameter": "Pagina",
+          "validation": "s.page"
+        },
+        {
+          "field": "pageSize",
+          "sqlParameter": "TamanoPagina",
+          "validation": "s.pageSize"
+        },
+        {
+          "field": "top",
+          "sqlParameter": "Top",
+          "validation": "z.coerce.number().int().min(1).max(100).default(10)"
+        }
+      ],
+      "resultSets": [
+        "sales",
+        "shipping"
+      ],
+      "singleRecordSets": [
+        "shipping"
+      ],
+      "idempotencyHeader": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/reports/finance",
+      "access": "admin",
+      "procedure": "SP_Reportes_Finanzas",
+      "fields": [
+        {
+          "field": "from",
+          "sqlParameter": "Desde",
+          "validation": "s.instant"
+        },
+        {
+          "field": "to",
+          "sqlParameter": "Hasta",
+          "validation": "s.instant"
+        }
+      ],
+      "resultSets": [
+        "cashFlow",
+        "ordersByState",
+        "averageTicket",
+        "returnsByState"
+      ],
+      "singleRecordSets": [
+        "cashFlow",
+        "averageTicket"
+      ],
+      "idempotencyHeader": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/reports/operations",
+      "access": "operator",
+      "procedure": "SP_Reportes_Operacion",
+      "fields": [
+        {
+          "field": "from",
+          "sqlParameter": "Desde",
+          "validation": "s.instant"
+        },
+        {
+          "field": "to",
+          "sqlParameter": "Hasta",
+          "validation": "s.instant"
+        },
+        {
+          "field": "module",
+          "sqlParameter": "Modulo",
+          "validation": "z.enum(['INVENTARIO','MOVIMIENTOS','RESERVAS','DEVOLUCIONES','REEMBOLSOS','CUPONES'])"
+        },
+        {
+          "field": "page",
+          "sqlParameter": "Pagina",
+          "validation": "s.page"
+        },
+        {
+          "field": "pageSize",
+          "sqlParameter": "TamanoPagina",
+          "validation": "s.pageSize"
+        }
+      ],
+      "resultSets": [
+        "rows"
+      ],
+      "singleRecordSets": [],
+      "idempotencyHeader": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/audit",
+      "access": "admin",
+      "procedure": "SP_Auditoria_Consultar",
+      "fields": [
+        {
+          "field": "from",
+          "sqlParameter": "Desde",
+          "validation": "s.instant"
+        },
+        {
+          "field": "to",
+          "sqlParameter": "Hasta",
+          "validation": "s.instant"
+        },
+        {
+          "field": "userId",
+          "sqlParameter": "IdUsuario",
+          "validation": "s.id.optional()"
+        },
+        {
+          "field": "entity",
+          "sqlParameter": "Entidad",
+          "validation": "s.text(100).optional()"
+        },
+        {
+          "field": "correlationId",
+          "sqlParameter": "IdCorrelacion",
+          "validation": "s.uuid.optional()"
+        },
+        {
+          "field": "module",
+          "sqlParameter": "Modulo",
+          "validation": "z.enum(['CATALOGO','SEGURIDAD','INVENTARIO','VENTAS','DEVOLUCIONES','CUPONES']).optional()"
+        },
+        {
+          "field": "page",
+          "sqlParameter": "Pagina",
+          "validation": "s.page"
+        },
+        {
+          "field": "pageSize",
+          "sqlParameter": "TamanoPagina",
+          "validation": "s.pageSize"
+        }
+      ],
+      "resultSets": [
+        "events"
+      ],
+      "singleRecordSets": [],
+      "idempotencyHeader": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/shipping-methods",
+      "access": "public",
+      "procedure": "SP_Checkout_ListarMetodosEnvio",
+      "fields": [],
+      "resultSets": [
+        "shippingMethods"
+      ],
+      "singleRecordSets": [],
+      "idempotencyHeader": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/health",
+      "access": "public",
+      "fields": [
+        "database=true opcional: solo conexión técnica; false por defecto"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/auth/csrf",
+      "access": "public",
+      "resultSets": [
+        "csrfToken"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/register",
+      "access": "public",
+      "fields": [
+        "firstName",
+        "lastName",
+        "email",
+        "password"
+      ],
+      "procedure": "SP_Seguridad_RegistrarUsuario"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/login",
+      "access": "public",
+      "fields": [
+        "email",
+        "password"
+      ],
+      "procedures": [
+        "SP_Seguridad_ObtenerAutenticacion",
+        "SP_Seguridad_CrearSesion",
+        "SP_Seguridad_ConsultarPerfil"
+      ],
+      "optionalGuestMerge": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/refresh",
+      "access": "refresh-cookie",
+      "fields": [],
+      "procedures": [
+        "SP_Seguridad_RotarToken",
+        "SP_Seguridad_ConsultarPerfil"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/logout",
+      "access": "user",
+      "fields": [
+        "all (boolean opcional)"
+      ],
+      "procedure": "SP_Seguridad_RevocarSesiones"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/carts/merge",
+      "access": "user+guest-cookie",
+      "fields": [],
+      "procedures": [
+        "SP_Carritos_ObtenerActivo",
+        "SP_Carritos_Fusionar"
+      ]
+    }
+  ]
+}
