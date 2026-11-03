@@ -1,0 +1,23 @@
+
+# Dependencias
+node_modules/
+
+# Archivos generados
+dist/
+build/
+coverage/
+
+# Variables de entorno y credenciales
+.env
+.env.*
+!.env.example
+
+# Archivos de registro
+*.log
+
+# Configuración local de editores
+.vscode/
+.idea/
+
+# Adicional
+AGENTS.md
