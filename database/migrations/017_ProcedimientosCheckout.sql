@@ -403,7 +403,8 @@ BEGIN
 EXEC dbo.SP_Interno_Autorizar @IdActor, @IdSesion, N''OPERADOR'';
 
 IF @Limite IS NULL OR @Limite NOT BETWEEN 1 AND 1000 THROW 62714,N''Límite inválido.'',1;
-DECLARE @Ahora datetime2(7)=SYSUTCDATETIME(),@Objetivos TABLE(IdCheckout bigint PRIMARY KEY);
+DECLARE @Ahora datetime2(7)=SYSUTCDATETIME();
+DECLARE @Objetivos TABLE(IdCheckout bigint PRIMARY KEY);
 INSERT @Objetivos SELECT TOP(@Limite) IdCheckout FROM dbo.Checkouts WITH(UPDLOCK,HOLDLOCK)
 WHERE Estado IN (''INICIADO'',''RESERVADO'') AND FechaExpiracionUTC<=@Ahora ORDER BY FechaExpiracionUTC,IdCheckout;
 UPDATE r SET Estado=''EXPIRADA'',FechaResolucionUTC=@Ahora,FechaActualizacionUTC=@Ahora FROM dbo.ReservasInventario r JOIN @Objetivos o ON o.IdCheckout=r.IdCheckout WHERE r.Estado=''ACTIVA'';
