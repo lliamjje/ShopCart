@@ -1,0 +1,5 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": { "noEmit": true, "rootDir": "../..", "types": ["node"] },
+  "include": ["./**/*.ts", "../support/**/*.ts", "../functional-safety.test.ts", "../functional-client.test.ts", "../functional-plan.test.ts", "../functional-contract.test.ts", "../functional-reports.test.ts", "../functional-rate.test.ts", "../functional-launcher.test.ts"]
+}

@@ -13,7 +13,9 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "tsx --test test/*.test.ts",
     "typecheck:integration": "tsc --noEmit -p test/integration/tsconfig.json",
-    "test:integration": "tsx --test --test-reporter=spec test/integration/shopcart.integration.ts"
+    "test:integration": "tsx --test --test-reporter=spec test/integration/shopcart.integration.ts",
+    "typecheck:functional": "tsc --noEmit -p test/functional/tsconfig.json",
+    "test:functional": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File test/functional/run.ps1"
   },
   "dependencies": {
     "argon2": "^0.45.2",

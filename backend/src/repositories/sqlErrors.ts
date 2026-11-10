@@ -1,6 +1,8 @@
 export const sqlErrors:Record<number,{status:number;message:string}>={
   // Códigos emitidos dentro de SP de negocio; no interpretar errores de scripts administrativos.
+  "62314": { "status": 403, "message": "No tiene acceso a la dirección solicitada." },
   "62501": { "status": 403, "message": "No tiene acceso al carrito solicitado." },
+  "62504": { "status": 409, "message": "Cancele o espere la expiración del checkout pendiente antes de modificar el carrito." },
   "62507": { "status": 409, "message": "La cantidad solicitada supera la disponibilidad actual." },
   "62702": { "status": 409, "message": "La clave de checkout ya se utilizó con otra solicitud." },
   "62902": { "status": 403, "message": "No tiene acceso al pedido solicitado." },

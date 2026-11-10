@@ -5,33 +5,8 @@ import request, { type Response } from 'supertest';
 import type { Express } from 'express';
 import { loadIntegrationConfig, applyIntegrationConfig } from './config.js';
 
-type Row = Record<string, unknown>;
+import { object, rows, id, intId, money, state, type Row } from '../support/values.js';
 const prefix = '/api/v1';
-function object(value: unknown): Row {
-  assert.ok(value !== null && typeof value === 'object' && !Array.isArray(value), 'Se esperaba un objeto del contrato HTTP.');
-  return value as Row;
-}
-function rows(value: unknown): Row[] {
-  assert.ok(Array.isArray(value), 'Se esperaba una colección del contrato HTTP.');
-  return value.map(object);
-}
-function id(value: unknown): string {
-  assert.equal(typeof value, 'string', 'bigint debe viajar como texto.');
-  assert.match(value as string, /^[1-9]\d*$/);
-  return value as string;
-}
-function intId(value: unknown): number {
-  assert.equal(typeof value, 'number');
-  assert.ok(Number.isInteger(value) && Number(value) > 0);
-  return value as number;
-}
-// Aserciones numéricas exactas, sin convertir dinero a coma flotante.
-function money(value: unknown): bigint {
-  assert.equal(typeof value, 'string', 'Importes HTTP deben ser strings.');
-  assert.match(value as string, /^-?\d+\.\d{4}$/);
-  return BigInt((value as string).replace('.', ''));
-}
-function state(value: unknown, expected: string): void { assert.equal(object(value).Estado, expected); }
 function data(response: Response, status = 200): Row {
   // No imprimir body: podría contener JWT, cookies, perfiles o información SQL.
   const code: unknown = response.body?.error?.code;

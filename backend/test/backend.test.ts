@@ -143,15 +143,22 @@ test('identificador inválido responde 400 antes de invocar un procedimiento',as
  assert.equal(calls.length,0);
 });
 
-for(const [number,status] of [[62501,403],[62507,409],[62702,409],[62902,403],[62908,409],[62930,409]] as const){
+for(const [number,status] of [[62314,403],[62501,403],[62504,409],[62507,409],[62702,409],[62902,403],[62908,409],[62930,409]] as const){
  test(`SQL ${number} se traduce a HTTP ${status} sin filtrar mensajes internos`,async()=>{
   try{
    // Se prueba también el formato anidado del driver; no se invoca SQL Server.
-   forcedSqlError=number%2?{number}:{originalError:{info:{number}}};
-   const r=await agent.get('/api/v1/catalog/categories');
-   assert.equal(r.status,status);assert.equal(r.body.success,false);
-   assert.equal(r.body.error.code,'SQL_'+number);
-   assert.ok(!JSON.stringify(r.body).includes('SQL interno sensible'));
+   const variants=number===62314||number===62504
+    ? [{number},{originalError:{info:{number}}}]
+    : [number%2?{number}:{originalError:{info:{number}}}];
+   for(const variant of variants){
+    forcedSqlError=variant;
+    const r=await agent.get('/api/v1/catalog/categories');
+    assert.equal(r.status,status);assert.equal(r.body.success,false);
+    assert.equal(r.body.error.code,'SQL_'+number);
+    if(number===62314)assert.equal(r.body.error.message,'No tiene acceso a la dirección solicitada.');
+    if(number===62504)assert.equal(r.body.error.message,'Cancele o espere la expiración del checkout pendiente antes de modificar el carrito.');
+    assert.ok(!JSON.stringify(r.body).includes('SQL interno sensible'));
+   }
   }finally{forcedSqlError=undefined;}
  });
 }
