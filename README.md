@@ -1,492 +1,199 @@
 # ShopCart
 
-**Aplicación web de comercio electrónico | Tech Challenge 360 — Grupo Pentandra**
+Aplicación web de comercio electrónico desarrollada para el **Tech Challenge 360 de Grupo Pentandra**. El proyecto integra SQL Server, una API REST en Node.js y un frontend en React, con énfasis en seguridad, integridad transaccional, control de inventario y trazabilidad de las compras.
 
-ShopCart es una aplicación de comercio electrónico desarrollada con React, Node.js, Express, TypeScript y Microsoft SQL Server. Su arquitectura separa la interfaz de usuario, la API REST y la lógica transaccional de la base de datos mediante procedimientos almacenados.
+> **Estado del proyecto:** la base de datos y el backend están implementados y han superado pruebas funcionales reales. El frontend se encuentra **en desarrollo**. Las pruebas de expiración temporal real de JWT y reservas aún están pendientes; no se consideran aprobadas.
 
-El sistema contempla gestión de productos, inventario, carritos, cupones, checkout, pagos simulados, pedidos, devoluciones, reembolsos y auditoría.
-
-## 1. Tecnologías
+## Tecnologías
 
 | Componente | Tecnología |
-|---|---|
-| Frontend | React y TypeScript |
-| Backend | Node.js 24, Express y TypeScript |
-| Base de datos | Microsoft SQL Server 2025 Express |
-| Acceso a datos | Procedimientos almacenados T-SQL |
-| Validaciones | TypeScript y validación de entradas |
-| Autenticación | Usuarios, sesiones y control de acceso por roles |
-| Moneda | Quetzales guatemaltecos (GTQ) |
-| Impuestos | IVA del 12 % incluido en los precios |
-| Pagos | Simulación, sin procesamiento bancario real |
-| Entorno | Windows, ejecución local sin Docker |
+| --- | --- |
+| Entorno | Windows 11 nativo, sin Docker ni WSL |
+| Base de datos | Microsoft SQL Server 2025 Express (`SQLEXPRESS`) |
+| Administración de base de datos | JetBrains DataGrip |
+| Backend | Node.js 24 LTS+, Express y TypeScript en modo `strict` |
+| Frontend | React 18+, TypeScript, Vite y Tailwind CSS (en desarrollo) |
+| Seguridad | Argon2id, JWT, refresh tokens rotativos, CSRF y autorización por roles |
+| Pruebas | Pruebas locales automatizadas, integración y pruebas funcionales sobre la API real |
+| Control de versiones | Git y Conventional Commits |
 
-## 2. Arquitectura
+**Regla fundamental:** la aplicación accede a las tablas de negocio **exclusivamente mediante procedimientos almacenados parametrizados**. El backend no utiliza ORM ni consultas SQL directas para operar sobre los datos comerciales.
 
-ShopCart sigue una arquitectura de tres capas:
+## Funcionalidades implementadas en el backend
 
-```text
-┌────────────────────────────────────┐
-│         FRONTEND                   │
-│       React + TypeScript           │
-└─────────────────┬──────────────────┘
-                  │ HTTP / JSON
-                  ▼
-┌────────────────────────────────────┐
-│            BACKEND                 │
-│      Node.js + Express             │
-│                                    │
-│  Rutas REST                        │
-│  Validación de solicitudes         │
-│  Autenticación y autorización      │
-│  Controladores y servicios         │
-│  Acceso mediante Stored Procedures │
-└─────────────────┬──────────────────┘
-                  │ mssql
-                  ▼
-┌────────────────────────────────────┐
-│          SQL SERVER                │
-│                                    │
-│  Procedimientos almacenados        │
-│  Transacciones                     │
-│  Restricciones e índices           │
-│  Inventario y reservas             │
-│  Pedidos y pagos                   │
-│  Historial y auditoría             │
-└────────────────────────────────────┘
-```
+- **Seguridad y usuarios:** registro, inicio de sesión, perfil, direcciones, sesiones, renovación y revocación de tokens, roles `Cliente`, `Operador` y `Administrador`.
+- **Catálogo:** categorías, productos, variantes, SKU, precios, disponibilidad y metadatos de imágenes.
+- **Inventario:** existencias por variante, movimientos de kardex y reservas temporales.
+- **Carritos:** clientes e invitados, modificación de artículos, comprobación de disponibilidad y fusión de carritos.
+- **Cupones:** descuentos porcentuales y fijos, vigencia, mínimos de compra y límites de uso.
+- **Checkout:** cálculo monetario con IVA incluido, métodos de envío, reserva de inventario e idempotencia.
+- **Pedidos y pagos:** estados, pagos simulados aprobados o rechazados y prevención de operaciones duplicadas.
+- **Cancelaciones y devoluciones:** devoluciones parciales, reintegros, reembolsos simulados y trazabilidad.
+- **Reportes y auditoría:** consultas de actividad, resultados operativos y ventas netas.
 
-### Frontend
+**Alcance conocido:** la API gestiona metadatos de imágenes, pero no implementa la carga ni la entrega de archivos de imagen. Algunos listados administrativos (por ejemplo, listados completos de usuarios y cupones) no están disponibles mediante los endpoints actuales; el frontend debe respetar estas limitaciones.
 
-La interfaz React consume la API REST y presenta las operaciones del comercio electrónico. No se conecta directamente a SQL Server ni ejecuta consultas SQL.
+## Arquitectura
 
-### Backend
-
-La API Express recibe solicitudes HTTP, valida los datos de entrada, aplica controles de acceso y ejecuta los procedimientos almacenados correspondientes.
-
-Las responsabilidades se distribuyen entre rutas, controladores, servicios, repositorios de acceso a datos y middleware de seguridad.
-
-### Base de datos
-
-SQL Server administra la integridad referencial, el inventario, los descuentos, las reservas, las operaciones monetarias simuladas y los registros históricos.
-
-Las operaciones de negocio utilizan procedimientos almacenados parametrizados, sin ORM ni consultas directas a las tablas desde la API.
-
-## 3. Requisitos previos
-
-Para instalar y ejecutar ShopCart localmente se necesita:
-
-- Windows 10 u 11.
-- Git.
-- Node.js 24 y npm.
-- Microsoft SQL Server 2025 Express.
-- SQL Server Management Studio (SSMS) o JetBrains DataGrip.
-- Un editor como Visual Studio Code.
-
-La instancia de SQL Server debe estar iniciada y permitir conexiones desde el equipo donde se ejecutará el backend.
-
-No se requiere Docker, WSL ni infraestructura en la nube.
-
-## 4. Descargar el proyecto
-
-Abrir PowerShell y ejecutar:
-
-```powershell
-git clone https://github.com/lliamjje/ShopCart.git
-cd ShopCart
-```
-
-Estructura general:
+El repositorio se organiza como un **monorepo**:
 
 ```text
-ShopCart/
+shopcart/
 ├── backend/
-├── frontend/
+│   ├── src/                  # API: rutas, controladores, servicios, repositorios y validaciones
+│   ├── test/
+│   │   ├── functional/       # Escenarios funcionales sobre la API real
+│   │   ├── integration/      # Pruebas de integración con su configuración específica
+│   │   ├── manual/           # Ejecutores locales de pruebas controladas
+│   │   └── support/          # Utilidades compartidas de pruebas
+│   ├── api-contract.json     # Inventario de rutas y contratos HTTP
+│   └── .env.example
+├── frontend/                 # Aplicación React en desarrollo
 ├── database/
-│   └── migrations/
+│   ├── migrations/           # Migraciones SQL numeradas
+│   ├── seeds/
+│   └── tests/
 ├── .gitignore
 └── README.md
 ```
 
-## 5. Instalación de la base de datos
+En el backend, las **rutas** definen los recursos HTTP; los **controladores** adaptan solicitudes y respuestas; los **servicios** coordinan casos de uso; los **repositorios** invocan procedimientos almacenados; y **SQL Server** aplica restricciones, transacciones e invariantes críticas. El frontend se comunica únicamente con la API REST.
 
-### 5.1. Preparar SQL Server
+## Base de datos y migraciones
 
-Iniciar el servicio de SQL Server Express y conectarse mediante DataGrip o SSMS utilizando una cuenta con permisos para crear bases de datos y objetos SQL.
+- Base: `ShopCart`.
+- Intercalación: `Latin1_General_100_CI_AI_SC`.
+- Recuperación local: `SIMPLE`.
+- Migraciones **001 a 022 ejecutadas** y controladas en `dbo.VersionesMigracion` con nombre de archivo y SHA-256.
+- La migración **022** inicializa de forma controlada y auditada el primer Administrador; no es un mecanismo general de administración de usuarios ni debe repetirse.
+- Las migraciones ya ejecutadas **no se editan**. Cualquier evolución del esquema o de los procedimientos requiere una migración posterior.
 
-Para una instalación local de SQL Server Express, el nombre de instancia habitual es:
+Los scripts se ejecutan **manualmente desde DataGrip**, en orden numérico y siguiendo las instrucciones específicas de cada archivo. No basta con ejecutar la carpeta completa sin revisar sus precondiciones, parámetros, huellas y permisos. La inicialización del Administrador necesita una cuenta legítimamente registrada y autorización administrativa en SQL Server; **no se deben publicar sus credenciales ni incorporar datos personales a los scripts**.
 
-```text
-.\SQLEXPRESS
-```
+La cuenta SQL utilizada por la API, `shopcart_service`, opera con privilegios mínimos y permisos de ejecución de los procedimientos públicos necesarios. No requiere acceso directo de lectura o escritura sobre las tablas de negocio ni privilegios `db_owner` o `sysadmin`.
 
-El nombre real de la instancia puede consultarse en SQL Server Configuration Manager.
+## Requisitos locales
 
-### 5.2. Crear la base ShopCart
+1. **Windows 11** con **Node.js 24 LTS o superior**, npm y Git.
+2. **SQL Server 2025 Express**, con la instancia `SQLEXPRESS` y la base de datos `ShopCart` configuradas.
+3. **DataGrip** u otra herramienta SQL compatible para administrar la instancia y aplicar migraciones.
+4. Puerto HTTP del backend disponible, por defecto `127.0.0.1:3000`.
+5. Para el frontend en desarrollo, puerto `127.0.0.1:5173`.
 
-Desde el cliente SQL:
+La instancia de demostración utiliza TCP local en `127.0.0.1:1433`. Ajusta los valores de entorno según tu instalación; no presupongas que la base, el login SQL ni las migraciones se crean automáticamente con `npm install`.
 
-1. Seleccionar la base de datos `master`.
-2. Activar el modo Auto-commit.
-3. Comprobar que no exista una transacción abierta.
-4. Abrir `database/migrations/001_CrearBaseDatos.sql`.
-5. Ejecutar el archivo completo como un único lote.
+## Configuración y ejecución del backend
 
-La migración inicial crea o valida la base de datos `ShopCart` y la tabla técnica `dbo.VersionesMigracion`.
-
-La configuración de la base incluye:
-
-| Propiedad | Valor |
-|---|---|
-| Nombre | `ShopCart` |
-| Collation | `Latin1_General_100_CI_AI_SC` |
-| Modelo de recuperación | `SIMPLE` |
-| Acceso | `MULTI_USER` |
-| Estado | `ONLINE` |
-
-La migración 001 es el procedimiento de inicialización y no se registra como versión 1 dentro de `dbo.VersionesMigracion`.
-
-### 5.3. Ejecutar las migraciones
-
-Una vez creada la base de datos, conectarse a `ShopCart` y ejecutar las migraciones restantes en orden:
-
-| Versión | Archivo | Propósito |
-|---|---|---|
-| 002 | `002_Seguridad.sql` | Roles, usuarios, direcciones y sesiones |
-| 003 | `003_Catalogo.sql` | Productos, categorías, variantes e imágenes |
-| 004 | `004_InventarioBase.sql` | Existencias y movimientos de inventario |
-| 005 | `005_CarritosCuponesBase.sql` | Carritos y cupones |
-| 006 | `006_MetodosEnvio.sql` | Métodos de envío |
-| 007 | `007_Checkout.sql` | Checkouts y sus detalles |
-| 008 | `008_Reservas.sql` | Reservas de inventario y cupones |
-| 009 | `009_PedidosPagos.sql` | Pedidos, detalles y pagos |
-| 010 | `010_DevolucionesAuditoria.sql` | Devoluciones, reembolsos y auditoría |
-| 011 | `011_RelacionesRestricciones.sql` | Relaciones y estructuras complementarias |
-| 012 | `012_ProcedimientosCatalogo.sql` | Procedimientos de catálogo |
-| 013 | `013_ProcedimientosSeguridad.sql` | Procedimientos de seguridad |
-| 014 | `014_ProcedimientosInventario.sql` | Procedimientos de inventario |
-| 015 | `015_ProcedimientosCarritos.sql` | Procedimientos de carritos |
-| 016 | `016_ProcedimientosCupones.sql` | Procedimientos de cupones |
-| 017 | `017_ProcedimientosCheckout.sql` | Procedimientos de checkout |
-| 018 | `018_ProcedimientosPedidosPagos.sql` | Procedimientos de pedidos y pagos |
-| 019 | `019_ProcedimientosDevoluciones.sql` | Procedimientos de devoluciones |
-| 020 | `020_ProcedimientosReportesAuditoria.sql` | Procedimientos de reportes y auditoría |
-
-Las migraciones 002–020 implementan un mecanismo de verificación mediante SHA-256 y `SESSION_CONTEXT`.
-
-### 5.4. Calcular el SHA-256 de una migración
-
-Desde PowerShell, en la raíz del proyecto, ejecutar:
-
-```powershell
-Get-FileHash .\database\migrations\002_Seguridad.sql -Algorithm SHA256
-```
-
-El comando devuelve una cadena hexadecimal de 64 caracteres que representa los 32 bytes del SHA-256 del archivo.
-
-La huella debe calcularse sobre el archivo definitivo, sin modificarlo posteriormente.
-
-### 5.5. Registrar el hash en la sesión SQL
-
-Desde DataGrip o SSMS, conectado a la base `ShopCart`, ejecutar:
-
-```sql
-DECLARE @SHA256 varbinary(32) =
-    CONVERT(
-        varbinary(32),
-        'REEMPLAZAR_CON_SHA256_DEL_ARCHIVO',
-        2
-    );
-
-EXEC sys.sp_set_session_context
-    @key = N'ShopCart.Migracion002.SHA256',
-    @value = @SHA256;
-```
-
-Sustituir `REEMPLAZAR_CON_SHA256_DEL_ARCHIVO` por el valor obtenido en PowerShell.
-
-El parámetro `@key` debe corresponder a la migración que se ejecutará:
-
-```text
-ShopCart.Migracion002.SHA256
-ShopCart.Migracion003.SHA256
-...
-ShopCart.Migracion020.SHA256
-```
-
-Es indispensable utilizar **la misma conexión y sesión de SQL Server** para establecer el hash y ejecutar la migración. Abrir otra consola o conexión puede producir una sesión SQL distinta.
-
-Después de establecer el hash:
-
-1. Abrir el archivo de la migración correspondiente.
-2. Copiar su contenido completo.
-3. Ejecutarlo en la misma sesión SQL.
-4. Comprobar que termina sin errores.
-5. Continuar con la siguiente migración.
-
-Cada migración debe ejecutarse una sola vez, en orden numérico y con Auto-commit activado.
-
-No deben agregarse instrucciones `GO` ni ejecutarse fragmentos aislados de los archivos.
-
-### 5.6. Verificar las migraciones
-
-Una vez ejecutadas las migraciones, consultar el registro técnico:
-
-```sql
-USE ShopCart;
-
-SELECT
-    [Version],
-    NombreArchivo,
-    CONVERT(varchar(64), SHA256, 2) AS SHA256,
-    FechaAplicacionUTC,
-    Ejecutor
-FROM dbo.VersionesMigracion
-ORDER BY [Version];
-```
-
-Para una instalación completa, el registro debe contener las versiones **002 a 020**.
-
-La versión 001 no aparece en esta tabla porque es la migración de inicialización.
-
-También pueden consultarse los procedimientos disponibles:
-
-```sql
-USE ShopCart;
-
-SELECT
-    SCHEMA_NAME(schema_id) AS Esquema,
-    name AS Procedimiento
-FROM sys.procedures
-ORDER BY name;
-```
-
-## 6. Configuración de la conexión SQL Server
-
-La API utiliza una conexión a SQL Server gestionada desde el backend.
-
-### 6.1. Habilitar TCP/IP
-
-Si la instancia SQL Server Express no acepta conexiones TCP/IP:
-
-1. Abrir SQL Server Configuration Manager.
-2. Acceder a **SQL Server Network Configuration**.
-3. Seleccionar **Protocols for SQLEXPRESS**.
-4. Habilitar **TCP/IP**.
-5. Revisar el puerto configurado en las propiedades TCP/IP.
-6. Reiniciar el servicio de SQL Server Express.
-
-La configuración del backend debe utilizar el servidor y puerto que realmente corresponden a la instancia instalada.
-
-### 6.2. Usuario de aplicación
-
-Configurar un usuario de SQL Server para la conexión del backend.
-
-La cuenta debe tener acceso a la base `ShopCart` y los permisos necesarios para ejecutar los procedimientos almacenados utilizados por la API.
-
-Para una instalación con separación de privilegios, la cuenta de aplicación no debe utilizar credenciales administrativas de SQL Server.
-
-Los permisos deben corresponder a las operaciones que la aplicación puede realizar.
-
-## 7. Instalación del backend
-
-Abrir PowerShell desde la raíz del proyecto:
+Desde la raíz del repositorio, en PowerShell:
 
 ```powershell
 cd backend
-npm install
-```
-
-### 7.1. Configurar variables de entorno
-
-Crear un archivo `.env` a partir de la plantilla del proyecto:
-
-```powershell
+npm.cmd ci
 Copy-Item .env.example .env
 ```
 
-Abrir `.env` y configurar los valores requeridos por la aplicación, especialmente:
+Edita **`backend/.env`** con valores locales válidos, sin subirlo a Git. Las variables previstas incluyen:
 
-- Servidor o instancia de SQL Server.
-- Puerto de conexión.
-- Nombre de la base de datos `ShopCart`.
-- Usuario y contraseña de SQL Server.
-- Parámetros de cifrado para conexiones locales.
-- Puerto HTTP de la API.
-- Origen permitido para el frontend.
-- Secretos utilizados por la autenticación.
+| Variable | Función |
+| --- | --- |
+| `NODE_ENV`, `HOST`, `PORT` | Entorno y servidor HTTP |
+| `SQL_SERVER`, `SQL_PORT`, `SQL_DATABASE` | Conexión a SQL Server |
+| `SQL_USER`, `SQL_PASSWORD` | Cuenta SQL de la API |
+| `SQL_ENCRYPT`, `SQL_TRUST_SERVER_CERTIFICATE` | Opciones de conexión cifrada |
+| `SQL_CONNECT_TIMEOUT_MS`, `SQL_REQUEST_TIMEOUT_MS` | Tiempos de espera de SQL |
+| `CORS_ORIGIN` | Origen permitido del frontend |
+| `JWT_SECRET`, `ACCESS_TOKEN_SECONDS`, `SESSION_DAYS` | Firma y duración de la autenticación |
 
-Los nombres exactos de las variables y las opciones admitidas están definidos en `backend/.env.example`.
+Los nombres y valores de referencia están documentados en `backend/.env.example`; consulta ese archivo para la configuración vigente. La aceptación de certificados SQL no verificados solo es apropiada para un entorno local controlado, no para producción.
 
-Las contraseñas y claves de autenticación deben mantenerse en el archivo local `.env`, que no debe publicarse en el repositorio.
+Para iniciar la API:
 
-### 7.2. Iniciar el servidor de desarrollo
+```powershell
+npm.cmd run dev
+```
+
+Con la base de datos disponible, el punto de comprobación es:
+
+```text
+GET http://127.0.0.1:3000/api/v1/health?database=true
+```
+
+La base de la API es `http://127.0.0.1:3000/api/v1`. El inventario de endpoints se mantiene en `backend/api-contract.json` (**64 rutas documentadas en la fase de backend**); el contrato y el código vigente prevalecen sobre ejemplos antiguos.
+
+## Frontend
+
+La interfaz se está construyendo con **React, TypeScript, Vite y Tailwind CSS**, a partir de una arquitectura modular. La propuesta incluye tienda pública, catálogo, detalle de producto, autenticación, carrito, checkout, cuenta del cliente y pantallas de operación/administración en función de los endpoints disponibles.
+
+Durante el desarrollo local, el frontend se integrará con la API en `127.0.0.1:3000` desde `127.0.0.1:5173`. El navegador debe conservar las cookies necesarias para CSRF, renovación de sesión y carrito invitado. Los JWT de acceso se mantendrán en memoria; no deben persistirse en `localStorage`.
+
+**Nota:** no se documenta aún un comando de instalación o una lista de pantallas como entrega verificada del frontend. Esta sección se actualizará cuando Codex complete la implementación y se comprueben sus scripts, compilación y navegación. No se utilizarán productos, precios ni pedidos simulados como sustituto de las respuestas reales de la API.
+
+## Reglas de negocio destacadas
+
+- Cada variante posee un SKU único, precio propio y saldo de inventario independiente.
+- **Disponible = existencia física − reservas vigentes**.
+- Las reservas de checkout tienen una vigencia de **15 minutos**; la expiración efectiva depende de las fechas evaluadas por SQL Server.
+- Los importes se almacenan y calculan con tipos decimales; los precios incluyen **IVA del 12 %**.
+- El checkout, los pagos y los reembolsos usan mecanismos de idempotencia; los reintentos con resultados inciertos no deben generar operaciones duplicadas.
+- Los pagos y reembolsos son **simulados**; la aplicación no procesa dinero real.
+- La autorización se valida en el backend y los procedimientos almacenados, no únicamente en el menú o en las rutas del frontend.
+- Los cambios de estado, cancelaciones y devoluciones afectan al inventario, al historial y a los reportes según las reglas del negocio.
+
+## Pruebas y estado de validación
+
+La base de datos y la API fueron comprobadas mediante pruebas automatizadas locales y ejecuciones funcionales contra SQL Server real. Los resultados registrados son:
+
+| Cobertura | Resultado observado |
+| --- | --- |
+| Suite funcional principal | **33 aprobadas**, 0 fallidas en la ejecución completa satisfactoria |
+| Escenario adicional: metadatos de imágenes | **Aprobado** |
+| Escenario adicional: reembolso rechazado y nuevo intento | **Aprobado** |
+| Escenario adicional: concurrencia acotada de checkout | **Aprobado** |
+| Permisos SQL directos de auditoría (`shopcart_service`) | Ausencia de permisos efectivos consultados; cobertura parcial de metadatos |
+| Pruebas locales automatizadas | **88 aprobadas** en la última validación reportada |
+| Expiración real por tiempo de JWT | **Pendiente** (solo cobertura local con reloj controlado) |
+| Expiración real de reservas tras 15 minutos | **Pendiente** |
+
+La suite funcional principal recorrió 225 solicitudes HTTP y terminó con código de salida 0. Las pruebas extendidas se ejecutaron con lotes de datos propios; estas ejecuciones pueden conservar usuarios, pedidos, pagos simulados y movimientos en la base local. **No existe rollback global**, por lo que deben ejecutarse únicamente en un entorno de desarrollo autorizado y tras revisar sus efectos.
 
 Desde `backend/`:
 
 ```powershell
-npm run dev
+npm.cmd run typecheck
+npm.cmd run build
+npm.cmd test
+npm.cmd run test:functional -- -List
+npm.cmd run test:functional -- -Preflight
 ```
 
-El proceso inicia la API Express utilizando la configuración del entorno.
-
-El servidor SQL debe estar disponible y las migraciones requeridas deben haberse ejecutado para utilizar las operaciones de negocio.
-
-### 7.3. Compilar el backend
-
-Para comprobar los tipos de TypeScript:
+La ejecución completa de escenarios funcionales, que **sí puede escribir datos**, se inicia explícitamente con:
 
 ```powershell
-npm run typecheck
+npm.cmd run test:functional
 ```
 
-Para compilar:
+El ejecutor solicita autorización y las credenciales administrativas mediante entrada oculta. También permite seleccionar escenarios extendidos individuales mediante `-NewScenario`; revisa `backend/test/functional/` antes de ejecutarlos. Evita repetir una suite completa tras un error sin inspeccionar el lote y los cambios parciales. Las pruebas de integración aisladas tienen su propia configuración y **no deben ejecutarse indiscriminadamente sobre la base principal**.
 
-```powershell
-npm run build
+## Seguridad
+
+- Las contraseñas se almacenan mediante **Argon2id**.
+- El acceso utiliza JWT de corta duración, refresh tokens con rotación y revocación de sesiones.
+- La API aplica protección **CSRF**, controles CORS y autorización por rol y por pertenencia del recurso.
+- `shopcart_service` debe mantener privilegios mínimos; nunca se deben otorgar permisos de tabla solo para facilitar una prueba.
+- Los archivos `.env`, contraseñas, claves JWT y tokens **no deben publicarse**.
+- Los mecanismos administrativos iniciales y sus cuentas están destinados al entorno de desarrollo y no deben considerarse una configuración lista para Internet sin una revisión de seguridad y despliegue.
+
+## Control de versiones y documentación
+
+Se utiliza **Conventional Commits**, con descripciones breves en español:
+
+```text
+feat(catalogo): implementar búsqueda de productos
+fix(backend): corregir validación de inventario
+test(backend): ampliar pruebas funcionales
+docs(readme): actualizar estado y ejecución de ShopCart
 ```
 
-Para iniciar la versión compilada:
+Las decisiones del proyecto se documentan en Markdown. `AGENTS.md` contiene instrucciones de trabajo **solo locales** y permanece excluido de Git. Para revisar la evolución de la implementación y sus verificaciones, consulta también el historial de commits del repositorio.
 
-```powershell
-npm run start
-```
-
-Los scripts de ejecución están definidos en `backend/package.json`.
-
-## 8. Instalación del frontend
-
-Abrir una segunda terminal PowerShell desde la raíz del repositorio:
-
-```powershell
-cd frontend
-npm install
-npm run dev
-```
-
-El frontend y el backend deben permanecer ejecutándose en terminales independientes.
-
-La dirección de la API utilizada por React debe corresponder al host y puerto configurados para Express.
-
-El navegador se conecta al frontend, y este envía las solicitudes de negocio a la API REST. SQL Server no debe exponerse directamente al navegador.
-
-## 9. API REST
-
-La API sigue una organización modular, con rutas HTTP agrupadas por funcionalidades.
-
-| Módulo | Responsabilidad |
-|---|---|
-| Catálogo | Consultar categorías, productos y variantes |
-| Seguridad | Registro, inicio de sesión, perfil y sesiones |
-| Inventario | Consultar existencias y registrar movimientos |
-| Carritos | Administrar artículos y cantidades |
-| Cupones | Validar códigos y condiciones de descuento |
-| Checkout | Cotizar y reservar inventario |
-| Pedidos y pagos | Procesar pagos simulados y consultar pedidos |
-| Devoluciones | Gestionar solicitudes y reembolsos |
-| Reportes | Consultar información operativa y financiera |
-| Auditoría | Consultar eventos registrados |
-
-Las rutas HTTP delegan el acceso a datos a procedimientos almacenados.
-
-El cliente no envía consultas SQL. Los identificadores, cantidades, filtros y demás entradas se validan antes de ejecutar la operación correspondiente.
-
-Los procesos críticos, como la confirmación de una compra, mantienen la integridad transaccional en SQL Server.
-
-## 10. Reglas de negocio
-
-### Inventario
-
-Cada variante de producto dispone de SKU, precio y existencias independientes.
-
-Los cambios físicos de inventario generan registros en el kardex. La disponibilidad considera las reservas activas y vigentes para evitar comprometer más unidades de las existentes.
-
-### Carritos
-
-El modelo admite carritos asociados a usuarios registrados e invitados.
-
-Las operaciones permiten agregar productos, modificar cantidades y gestionar el contenido antes de iniciar el checkout.
-
-### Cupones
-
-Los cupones permiten aplicar descuentos sujetos a reglas de vigencia, monto mínimo, categoría y límites de utilización.
-
-Los descuentos se validan contra las reglas registradas en SQL Server.
-
-### Checkout y reservas
-
-El checkout utiliza reservas temporales de inventario y cupones, con una vigencia funcional de **15 minutos**.
-
-La confirmación del pedido depende de que se cumplan las condiciones de disponibilidad, vigencia y consistencia de importes.
-
-### Pagos simulados
-
-Los pagos no se conectan a una pasarela bancaria real.
-
-La simulación permite trabajar con resultados de aprobación y rechazo, manteniendo identificadores y reglas de idempotencia para evitar duplicar operaciones.
-
-### Impuestos
-
-Todos los importes se manejan en quetzales guatemaltecos.
-
-Los precios incluyen IVA del 12 %. El impuesto se desglosa dentro del precio; no se suma nuevamente al total.
-
-### Devoluciones y reembolsos
-
-El modelo admite devoluciones de cantidades parciales o completas, control de estados y reembolsos simulados relacionados con pagos aprobados.
-
-Los reembolsos se registran separadamente de los pagos originales para conservar trazabilidad.
-
-### Auditoría
-
-Las operaciones relevantes pueden generar registros de auditoría con información del actor, entidad, acción y fecha UTC.
-
-El historial de estados de pedidos conserva las transiciones realizadas durante su ciclo de vida.
-
-## 11. Organización de la base de datos
-
-El esquema relacional está distribuido entre los siguientes dominios:
-
-| Dominio | Tablas principales |
-|---|---|
-| Seguridad | `Roles`, `Usuarios`, `Direcciones`, `SesionesUsuario`, `TokensRenovacion` |
-| Catálogo | `Categorias`, `Productos`, `VariantesProducto`, `ImagenesProducto` |
-| Inventario | `Existencias`, `MovimientosInventario` |
-| Compras | `Carritos`, `DetallesCarrito`, `Checkouts`, `DetallesCheckout` |
-| Reservas | `ReservasInventario`, `ReservasCupon` |
-| Cupones | `Cupones`, `UsosCupon` |
-| Pedidos | `Pedidos`, `DetallesPedido`, `HistorialEstadosPedido` |
-| Pagos | `Pagos`, `ReembolsosCancelacion` |
-| Devoluciones | `Devoluciones`, `DetallesDevolucion`, `Reembolsos` |
-| Auditoría | `EventosAuditoria` |
-
-Las relaciones y restricciones se encuentran definidas en las migraciones SQL versionadas.
-
-El diseño utiliza claves primarias y foráneas, restricciones CHECK y UNIQUE, índices y transacciones para proteger la consistencia de los datos.
-
-## 12. Orden de inicio de la aplicación
-
-Para ejecutar el sistema localmente:
-
-1. Iniciar SQL Server Express.
-2. Comprobar que la base `ShopCart` contiene las migraciones requeridas.
-3. Configurar el archivo `backend/.env`.
-4. Iniciar el backend con `npm run dev` desde `backend/`.
-5. Iniciar el frontend con `npm run dev` desde `frontend/`.
-6. Abrir en el navegador la dirección que indique el servidor de desarrollo del frontend.
-
-Para detener ambos servidores, utilizar `Ctrl + C` en sus terminales.
-
-## 13. Consideraciones de seguridad
-
-El proyecto utiliza separación entre interfaz, API y base de datos.
-
-Las operaciones protegidas requieren validación de identidad y autorización conforme al rol correspondiente. Los procedimientos almacenados gestionan las operaciones transaccionales sobre los datos.
-
-Las credenciales de base de datos y los secretos de autenticación se configuran mediante variables de entorno. No deben almacenarse en el código fuente ni exponerse al navegador.
-
-Los pagos son exclusivamente simulados; la aplicación no requiere información real de tarjetas bancarias.
-
----
-
-**ShopCart — Tech Challenge 360 | Grupo Pentandra**
+> **Importante:** este README distingue entre componentes implementados, pruebas realizadas y trabajo pendiente. Antes de una entrega o demostración final, verificar de nuevo la instalación desde una copia limpia y actualizar el apartado del frontend con los comandos y pantallas efectivamente terminados.
