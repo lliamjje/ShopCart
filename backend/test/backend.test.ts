@@ -16,6 +16,7 @@ const { accessToken,readAccess,idempotencyHash }=await import('../src/utils/toke
 const { id,revision }=await import('../src/schemas/common.js');
 const app=createApp(),agent=request.agent(app);
 let connections=0,mode='missing';
+let forcedSqlError: {number?:number;code?:string;originalError?:{info:{number:number}}}|undefined;
 const calls:{name:string;params:Record<string,unknown>}[]=[];
 function rows(values:Record<string,unknown>[],columns:Record<string,unknown>={}){return Object.assign(values,{columns});}
 const fakePool={
@@ -25,6 +26,7 @@ const fakePool={
  output(){return this;},
  async execute(name:string){
  calls.push({name,params});
+ if(forcedSqlError)throw Object.assign(new Error('SQL interno sensible que nunca debe aparecer en HTTP'),forcedSqlError);
  if(name==='dbo.SP_Seguridad_ConsultarPerfil')return {recordsets:[rows([{IdUsuario:'9007199254740993',Rol:'Cliente'}],{IdUsuario:{type:sql.BigInt}}),rows([])],output:{}};
  if(mode==='cart'&&name==='dbo.SP_Carritos_ObtenerActivo')return {recordsets:[rows([{IdCarrito:'9223372036854775807'}],{IdCarrito:{type:sql.BigInt}})],output:{}};
  if(mode==='cart'&&name==='dbo.SP_Carritos_Consultar')return {recordsets:[rows([{IdCarrito:'9223372036854775807',RevisionCarrito:'2026-11-02T12:00:00.1234567'}],{IdCarrito:{type:sql.BigInt}}),rows([]),rows([{Subtotal:0,Descuento:0}],{Subtotal:{type:sql.Decimal,scale:4},Descuento:{type:sql.Decimal,scale:4}})],output:{}};
@@ -131,3 +133,37 @@ test('inventario HTTP sin duplicados ni exposición de helpers internos',async()
  for(const e of manifest.endpoints)assert.ok(!String(e.procedure??'').startsWith('SP_Interno_'));
  assert.equal(manifest.endpointCount,keys.length);
 });
+
+test('identificador inválido responde 400 antes de invocar un procedimiento',async()=>{
+ calls.length=0;
+ for(const value of ['abc','0','-1','1.5','9223372036854775808']){
+  const r=await agent.get('/api/v1/catalog/products/'+value);
+  assert.equal(r.status,400);assert.equal(r.body.error.code,'VALIDATION_ERROR');
+ }
+ assert.equal(calls.length,0);
+});
+
+for(const [number,status] of [[62501,403],[62507,409],[62702,409],[62902,403],[62908,409],[62930,409]] as const){
+ test(`SQL ${number} se traduce a HTTP ${status} sin filtrar mensajes internos`,async()=>{
+  try{
+   // Se prueba también el formato anidado del driver; no se invoca SQL Server.
+   forcedSqlError=number%2?{number}:{originalError:{info:{number}}};
+   const r=await agent.get('/api/v1/catalog/categories');
+   assert.equal(r.status,status);assert.equal(r.body.success,false);
+   assert.equal(r.body.error.code,'SQL_'+number);
+   assert.ok(!JSON.stringify(r.body).includes('SQL interno sensible'));
+  }finally{forcedSqlError=undefined;}
+ });
+}
+for(const [label,error] of [
+ ['permisos SQL',{number:229}],['timeout',{code:'ETIMEOUT'}],['error no reconocido',{number:99999}]
+] as const){
+ test(`fallo operativo ${label} conserva HTTP 503`,async()=>{
+  try{
+   forcedSqlError=error;
+   const r=await agent.get('/api/v1/catalog/categories');
+   assert.equal(r.status,503);assert.equal(r.body.success,false);
+   assert.ok(!JSON.stringify(r.body).includes('SQL interno sensible'));
+  }finally{forcedSqlError=undefined;}
+ });
+}
