@@ -10,7 +10,8 @@ No retries or automatic cleanup after failure. Review the printed batch first.
 Managed strings cannot be guaranteed to be erased immediately by .NET/Node.
 #>
 [CmdletBinding()]
-param([string[]]$Modules = @('all'), [switch]$List, [switch]$CheckTransport, [switch]$Preflight)
+param([string[]]$Modules = @('all'), [switch]$List, [switch]$CheckTransport, [switch]$Preflight,
+    [ValidateSet('images','refunds','concurrency','expiry','jwt','expirations')][string]$NewScenario)
 
 & {
     $ErrorActionPreference = 'Stop'
@@ -38,13 +39,17 @@ param([string[]]$Modules = @('all'), [switch]$List, [switch]$CheckTransport, [sw
             throw 'Seleccion de modulos invalida.'
         }
         if ($List -and $CheckTransport) { throw 'Modos offline incompatibles.' }
+        if ($NewScenario -and ($Preflight -or $CheckTransport -or $Modules.Count -ne 1 -or $Modules[0] -ne 'all')) { throw 'NewScenario requiere seleccion independiente.' }
         if ($Preflight -and ($List -or $CheckTransport -or $Modules.Count -ne 1 -or $Modules[0] -ne 'all')) { throw 'Preflight debe ejecutarse sin otros modos ni modulos.' }
         if ($Preflight) { $Modules = @('preflight') }
+        if ($NewScenario) { $Modules = @('extended') }
         if (-not ($List -or $CheckTransport)) {
         $stage = 'confirmacion'
         $safeReason = 'CONFIRMATION_REQUIRED'
         if ($Preflight) { Write-Host 'Preflight: solo CSRF, login y perfil; el login crea una sesion real.' }
         else { Write-Host 'La suite creara datos ficticios y operaciones simuladas en ShopCart.' }
+        if ($NewScenario -in @('expiry','jwt','expirations')) { Write-Host 'Modo prolongado explicito: espera real hasta vencimiento (unos 15 minutos para reservas), con progreso cada 30 segundos.' }
+        if ($NewScenario -eq 'concurrency') { Write-Host 'Carrera acotada: exactamente dos checkouts sobre una unidad exclusiva del lote.' }
         Write-Host 'Los modulos incluyen automaticamente sus dependencias. No se borrara el historial.'
         $confirm = Read-Host 'Escriba PRUEBAS para autorizar esta ejecucion'
         if ($confirm -cne 'PRUEBAS') { throw 'Ejecucion no confirmada.' }
@@ -85,6 +90,7 @@ param([string[]]$Modules = @('all'), [switch]$List, [switch]$CheckTransport, [sw
         if ($List) { $start.Arguments += ' --list' }
         if ($CheckTransport) { $start.Arguments += ' --check-transport' }
         if ($Preflight) { $start.Arguments += ' --preflight' }
+        if ($NewScenario) { $start.Arguments += ' --new-scenario ' + $NewScenario }
         $start.WorkingDirectory = $backendRoot
         $start.UseShellExecute = $false
         $start.CreateNoWindow = $true

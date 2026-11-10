@@ -120,6 +120,20 @@ test('catálogo de firmas coincide con los 52 SP de las migraciones',async()=>{
  }}
  assert.equal(count,52);assert.equal(Object.keys(procedures).length,52);
 });
+test('JWT: reloj local controlado acepta antes de exp y rechaza exactamente en exp',t=>{
+ t.mock.timers.enable({apis:['Date'],now:new Date('2026-11-09T12:00:00Z')});
+ try{
+  const identity={id:'1',sessionId:'11111111-1111-4111-8111-111111111111',role:'Cliente' as const};
+  const token=accessToken(identity);
+  const claims=jwt.decode(token) as {iat:number;exp:number};
+  assert.ok(claims.exp>claims.iat);
+  t.mock.timers.tick((claims.exp-claims.iat)*1000-1);
+  assert.equal(readAccess(token).id,'1');
+  t.mock.timers.tick(1);
+  assert.throws(()=>readAccess(token),error=>error instanceof Error&&'status' in error&&error.status===401&&'code' in error&&error.code==='INVALID_ACCESS_TOKEN');
+ }finally{t.mock.timers.reset();}
+});
+
 test('Argon2id nativo calcula y verifica hashes sin SQL',async()=>{
  const hash=await argon2.hash('not-a-real-password',{type:argon2.argon2id,memoryCost:19456,timeCost:2,parallelism:1});
  assert.ok(hash.startsWith('$argon2id$'));assert.ok(await argon2.verify(hash,'not-a-real-password'));
@@ -143,11 +157,11 @@ test('identificador inválido responde 400 antes de invocar un procedimiento',as
  assert.equal(calls.length,0);
 });
 
-for(const [number,status] of [[62314,403],[62501,403],[62504,409],[62507,409],[62702,409],[62902,403],[62908,409],[62930,409]] as const){
+for(const [number,status] of [[62314,403],[62501,403],[62504,409],[62507,409],[62702,409],[62710,409],[62902,403],[62908,409],[62930,409]] as const){
  test(`SQL ${number} se traduce a HTTP ${status} sin filtrar mensajes internos`,async()=>{
   try{
    // Se prueba también el formato anidado del driver; no se invoca SQL Server.
-   const variants=number===62314||number===62504
+   const variants=number===62314||number===62504||number===62710
     ? [{number},{originalError:{info:{number}}}]
     : [number%2?{number}:{originalError:{info:{number}}}];
    for(const variant of variants){
@@ -157,6 +171,7 @@ for(const [number,status] of [[62314,403],[62501,403],[62504,409],[62507,409],[6
     assert.equal(r.body.error.code,'SQL_'+number);
     if(number===62314)assert.equal(r.body.error.message,'No tiene acceso a la dirección solicitada.');
     if(number===62504)assert.equal(r.body.error.message,'Cancele o espere la expiración del checkout pendiente antes de modificar el carrito.');
+    if(number===62710)assert.equal(r.body.error.message,'Inventario insuficiente para completar el checkout.');
     assert.ok(!JSON.stringify(r.body).includes('SQL interno sensible'));
    }
   }finally{forcedSqlError=undefined;}

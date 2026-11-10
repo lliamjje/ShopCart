@@ -7,7 +7,7 @@ test('contrato funcional: todas las llamadas con rutas explícitas coinciden con
     endpoints:{method:string;path:string;fields?:({field:string}|string)[]}[]
   };
   const files=(await readdir(new URL('./functional/modules/',import.meta.url))).filter(f=>f.endsWith('.ts')).map(f=>'modules/'+f);
-  files.push('context.ts','client.ts');let checked=0;
+  files.push('context.ts','client.ts','extended.ts');let checked=0;
   for(const file of files){
     const source=await readFile(new URL('./functional/'+file,import.meta.url),'utf8');
     // Verificación de las rutas literales y templates usados actualmente. Los

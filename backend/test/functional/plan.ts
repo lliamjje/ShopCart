@@ -14,12 +14,12 @@ import { reports } from './modules/reports.js';
 import { edges } from './modules/edges.js';
 
 const pending:Scenario[]=[
- ['Expiración efectiva tras 15 minutos','Prueba prolongada pendiente; no se cambia el reloj ni se ejecuta expire global sobre datos existentes.'],
- ['Concurrencia y carga','Requiere autorización de carga separada; la suite funcional es secuencial.'],
- ['Denegación SQL de UPDATE/DELETE de auditoría','Requiere revisar permisos con una cuenta específica; no se usa SQL directo.'],
- ['JWT expirado por tiempo real','Cubierto localmente; prueba HTTP prolongada pendiente sin fabricar ni firmar tokens.'],
- ['Reembolso rechazado y nuevo intento','Pendiente de un fixture independiente para no mezclar operaciones monetarias ya resueltas.'],
- ['Imágenes de producto','Pendiente de un archivo local autorizado; no se crean rutas ficticias a archivos inexistentes.']
+ ['Expiración efectiva tras 15 minutos','Preparada: -NewScenario expiry; espera real explícita de 16 minutos, sin expire global.'],
+ ['Concurrencia y carga','Carrera preparada: -NewScenario concurrency; bloqueada mientras SQL 62710 no se traduzca a 409. Carga masiva fuera de alcance.'],
+ ['Denegación SQL de UPDATE/DELETE de auditoría','Verificación de lectura separada: audit-permissions.sql con conexión de servicio; no se ejecuta desde API.'],
+ ['JWT expirado por tiempo real','Preparada: -NewScenario jwt; espera hasta exp del JWT original sin alterar relojes.'],
+ ['Reembolso rechazado y nuevo intento','Preparada: -NewScenario refunds con pedido, pago y devolución nuevos propios.'],
+ ['Imágenes de producto','Metadatos preparados: -NewScenario images. Upload/servir archivos no existe en el contrato.']
 ].map(([name,reason])=>({module:'pending',name:name!,pending:reason!,run:async()=>{}}));
 export const all=[...smoke,...auth,...users,...catalog,...inventory,...publication,...carts,...coupons,...checkout,...payments,...orders,...returns,...reports,...edges,...sessions,...pending];
 

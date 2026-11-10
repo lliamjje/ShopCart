@@ -5,13 +5,16 @@ import { all, selectScenarios } from './plan.js';
 import {authPolicy} from './rate-policy.js';
 import {SafeFailure} from './client.js';
 import {preflight} from './preflight.js';
+import {extendedPlan} from './extended.js';
 let startupStage='CARGA';
 let scenariosStarted=false;
 
 async function main():Promise<void>{
+  const extensionIndex=process.argv.indexOf('--new-scenario');
+  const extension=extensionIndex<0?undefined:process.argv[extensionIndex+1];
   if(process.argv.includes('--auth-policy')){console.log(JSON.stringify(authPolicy));return;}
   if(process.argv.includes('--list')) {
-    console.table(all.map(s=>({module:s.module,scenario:s.name,status:s.pending?'PENDIENTE':'IMPLEMENTADA',reason:s.pending??''})));
+    console.table((extension?extendedPlan(extension):all).map(s=>({module:s.module,scenario:s.name,status:s.pending?'PENDIENTE':'IMPLEMENTADA',reason:s.pending??''})));
     return;
   }
   // Las credenciales solo entran por stdin anónimo del lanzador, nunca argv/env/archivos.
@@ -43,7 +46,8 @@ async function main():Promise<void>{
     }finally{config.password='';config.email='';c.clear();}
     return;
   }
-  const scenarios=selectScenarios(config.modules);
+  if(extensionIndex>=0&&(!extension||config.modules.length!==1||config.modules[0]!=='extended'))throw new ConfigFailure('INPUT_SHAPE');
+  const scenarios=extension?extendedPlan(extension):selectScenarios(config.modules);
   const selected=new Set(scenarios.map(s=>s.module));
   let active='preparación';
   const operations:Record<string,unknown>[]=[];
@@ -56,7 +60,7 @@ async function main():Promise<void>{
     console.log('[EJECUTOR] Entrada y plan validados; comienza preparación HTTP.');
     console.log(JSON.stringify({batch:c.batch,modules:[...selected],notice:'Datos propios; sin reintentos, SQL directo, borrados ni modificación del catálogo anterior.'}));
     await c.guest.init();
-    if(selected.has('auth')){
+    if(selected.has('auth')||(selected.has('extended')&&scenarios.some(s=>!s.pending))){
       startupStage='PREFLIGHT';
       await preflight(c,config.email,config.password);
       console.log('[PREFLIGHT] APROBADO; se reutiliza la sesión administrativa en los escenarios.');

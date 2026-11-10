@@ -1,4 +1,4 @@
-export type Kind = 'user'|'category'|'product'|'variant'|'cart'|'coupon'|'checkout'|'order'|'return'|'address'|'line';
+export type Kind = 'user'|'category'|'product'|'variant'|'cart'|'coupon'|'checkout'|'order'|'return'|'address'|'line'|'image';
 export class Owned {
   private readonly resources = new Map<Kind, Set<string>>();
   constructor(readonly batch?:string) {}
@@ -43,6 +43,8 @@ export function guard(method: string, path: string, body: Record<string, unknown
     owned.require(kinds[target[1]!]!,target[2]);
   }
   const address = route.match(/^\/users\/me\/addresses\/(\d+)$/);
+  const image = route.match(/^\/catalog\/images\/(\d+)$/);
+  if(image) owned.require('image',image[1]);
   if(address) owned.require('address',address[1]);
   if(route.startsWith('/carts/')) {
     if(!testIdentity) throw Error('Solo cuentas nuevas o invitados del lote pueden operar carritos.');
@@ -53,8 +55,8 @@ export function guard(method: string, path: string, body: Record<string, unknown
   }
   if(method === 'DELETE' && !/^\/carts\/current\/items(?:\/\d+)?$/.test(route)) throw Error('Eliminación bloqueada.');
   const allowed:Record<string,RegExp>={
-    POST:/^(\/catalog\/(categories|products|variants)|\/inventory\/movements|\/coupons(\/validate)?|\/carts\/(current\/items|merge)|\/checkouts(\/\d+\/cancel)?|\/orders\/(payments|\d+\/cancel)|\/returns(\/\d+\/(complete|refunds|cancel|items))?|\/users\/me\/addresses)$/,
-    PATCH:/^(\/catalog\/(categories|products|variants)\/\d+|\/coupons\/\d+(\/state)?|\/carts\/current\/items\/\d+|\/orders\/\d+\/state|\/returns\/\d+\/state|\/users\/(me(\/addresses\/\d+)?|\d+\/access))$/,
+    POST:/^(\/catalog\/(categories|products|variants|images)|\/inventory\/movements|\/coupons(\/validate)?|\/carts\/(current\/items|merge)|\/checkouts(\/\d+\/cancel)?|\/orders\/(payments|\d+\/cancel)|\/returns(\/\d+\/(complete|refunds|cancel|items))?|\/users\/me\/addresses)$/,
+    PATCH:/^(\/catalog\/(categories|products|variants|images)\/\d+|\/coupons\/\d+(\/state)?|\/carts\/current\/items\/\d+|\/orders\/\d+\/state|\/returns\/\d+\/state|\/users\/(me(\/addresses\/\d+)?|\d+\/access))$/,
     DELETE:/^\/carts\/current\/items(\/\d+)?$/
   };
   if(!allowed[method]?.test(route)) throw Error('Método o ruta fuera del alcance de la suite.');

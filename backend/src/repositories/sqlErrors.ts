@@ -5,6 +5,7 @@ export const sqlErrors:Record<number,{status:number;message:string}>={
   "62504": { "status": 409, "message": "Cancele o espere la expiración del checkout pendiente antes de modificar el carrito." },
   "62507": { "status": 409, "message": "La cantidad solicitada supera la disponibilidad actual." },
   "62702": { "status": 409, "message": "La clave de checkout ya se utilizó con otra solicitud." },
+  "62710": { "status": 409, "message": "Inventario insuficiente para completar el checkout." },
   "62902": { "status": 403, "message": "No tiene acceso al pedido solicitado." },
   "62908": { "status": 409, "message": "La cantidad solicitada supera las unidades que pueden devolverse." },
   "62930": { "status": 409, "message": "El pedido ya no admite cancelación en su estado actual." },
